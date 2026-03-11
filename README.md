@@ -22,6 +22,7 @@ Fantastic single & multi-market charting. Featuring: equity (total & individual 
 - [Setup](#setup)
 - [Writing Strategies and Backtests](#writing-strategies-and-backtests)
 - [Running Backtests](#running-backtests)
+- [Execution Modeling](#execution-modeling)
 - [Plotting](#plotting)
 - [Testing](#testing)
 - [Updating the Subtree](#updating-the-subtree)
@@ -74,9 +75,11 @@ Good public examples:
 
 - Reusable EMA strategy logic: [`strategies/ema_crossover.py`](strategies/ema_crossover.py)
 - Reusable final-period momentum logic: [`strategies/final_period_momentum.py`](strategies/final_period_momentum.py)
+- Reusable late-favorite limit-hold logic: [`strategies/late_favorite_limit_hold.py`](strategies/late_favorite_limit_hold.py)
 - Kalshi runner using a root strategy module: [`backtests/kalshi_breakout.py`](backtests/kalshi_breakout.py)
 - Polymarket runner using a root strategy module: [`backtests/polymarket_vwap_reversion.py`](backtests/polymarket_vwap_reversion.py)
 - Public multi-market runner: [`backtests/polymarket_sports_final_period_momentum.py`](backtests/polymarket_sports_final_period_momentum.py)
+- Public resolved multi-market runner with settlement-adjusted PnL: [`backtests/polymarket_sports_late_favorite_limit_hold.py`](backtests/polymarket_sports_late_favorite_limit_hold.py)
 
 Backtest entrypoints should expose three things at module level:
 
@@ -117,6 +120,7 @@ Direct script execution is usually better once you know which runner you want:
 MARKET_TICKER=KXNEXTIRANLEADER-45JAN01-MKHA uv run python backtests/kalshi_breakout.py
 MARKET_SLUG=will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026 uv run python backtests/polymarket_vwap_reversion.py
 MARKET_SLUGS=nfl-was-gb-2025-09-11,nfl-nyj-cin-2025-10-26 TARGET_RESULTS=2 uv run python backtests/polymarket_sports_final_period_momentum.py
+TARGET_RESULTS=50 uv run python -m backtests.polymarket_sports_late_favorite_limit_hold
 ```
 
 These hit live APIs. Expect latency and rate limits.
@@ -128,6 +132,40 @@ Most runners are configured through environment variables. Common ones:
 - `LOOKBACK_DAYS` for data window size
 - `TRADE_SIZE` and `INITIAL_CASH` for sizing
 - `TARGET_RESULTS` for multi-market runners
+
+## Execution Modeling
+
+Backtests here replay venue data from Kalshi and Polymarket into NautilusTrader.
+The main things which affect realized backtest performance beyond the raw API
+data are:
+
+- exchange fee models
+- slippage for taker-style orders
+- existing engine behavior such as IOC handling, price rounding, cash-account limits, and `AccountBalanceNegative` stops
+
+### Fees
+
+- Kalshi uses a nonlinear expected-earnings fee model.
+- Polymarket uses the venue fee model plus CLOB `fee-rate` enrichment when the
+  market payload itself reports zero fees.
+- If a venue reports zero fees for a market, the backtest also applies zero fees.
+
+### Slippage
+
+- Shared prediction-market backtests default to a custom taker fill model.
+- Non-limit orders get a deterministic one-tick adverse fill.
+- Polymarket uses the market's own tick size.
+- Kalshi uses one cent as the effective order tick for taker slippage.
+- Limit orders keep the default Nautilus matching behavior and do not get the
+  forced one-tick adverse move.
+
+### Limits
+
+- This is a conservative taker-execution proxy, not full order-book replay.
+- Historical backtests here do not model queue position, full L2 depth, or
+  exact partial-sweep behavior.
+- Taker-heavy strategies that try to harvest very small price changes can look
+  much worse once fees and one-tick slippage are turned on.
 
 ## Plotting
 
@@ -180,8 +218,10 @@ Unlike git submodules, subtrees copy upstream code directly into this repo — t
 - [ ] live trading (thinking of [pmxt](https://github.com/pmxt-dev/pmxt))
 - [x] multi-market support within strategies
 - [x] better position sizing capabilities
-- [x] fee modeling, slippage modeling *** exchange fees, maker/taker fees, etc [PR#4](https://github.com/ben-gramling/nautilus_pm/pull/4)
+- [x] fee modeling, slippage modeling *** exchange fees, maker/taker fees, etc [PR#4](https://github.com/ben-gramling/nautilus_pm/pull/4), [PR#6](https://github.com/ben-gramling/nautilus_pm/pull/6)
 - [x] much better & informative charting [PR#5](https://github.com/ben-gramling/nautilus_pm/pull/5)
+
+> Note: i'm still not entirely positive that slippage was implemented correctly. i aimed for a conservative approach, and supposedly there are slippage limits on these platforms, but still remains a challenge to model properly. TLDR; pain in the ass.
 
 ## Known Issues
 
