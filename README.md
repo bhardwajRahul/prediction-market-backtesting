@@ -218,6 +218,27 @@ data are:
 - Each surviving JSON payload is decoded into Nautilus
   `OrderBookDeltas`/`QuoteTick` records, and the backtest waits for that full
   ingest to finish before strategy execution starts.
+- What a cold PMXT load is actually doing:
+  - it does **not** download the full raw hourly parquet files to local disk
+  - it also does **not** send a true server-side query to PMXT and receive only
+    final Nautilus records back
+  - instead, Arrow opens each remote hourly parquet object over HTTPS and uses
+    range requests to scan it from this machine
+  - parquet pushdown prunes by `market_id` and `update_type`, but `token_id`
+    still cannot be pruned at the parquet level because it lives inside the
+    JSON `data` payload
+  - that means the loader still has to pull the surviving `data` strings for
+    the market-level scan back to this machine, regex-filter them for one
+    `token_id`, decode the JSON, replay the book, and build a fully ordered
+    in-memory event list before the backtest can start
+- Why the cache can stay tiny while the cold load is still slow:
+  - the cache stores only the final filtered rows for one
+    `(condition_id, token_id, hour)` tuple, not the raw PMXT hour
+  - network traffic on a cold run can still be much larger than the cache
+    footprint because each hour still requires parquet metadata reads, remote
+    range reads, market-level filtering, token-level JSON filtering, and decode
+  - the default in-memory HTTP readahead (`32 MiB` blocks) improves latency,
+    but it can also fetch more bytes than end up in the tiny filtered cache
 - Local PMXT disk cache is optional. By default the loader remote-scans the
   hourly parquet files and does not persist PMXT data to disk. If
   `PMXT_CACHE_DIR` is set, the loader writes the filtered hourly parquet table
@@ -238,7 +259,8 @@ data are:
   own filtered hourly cache.
 - The loader also prefetches multiple hours in parallel while still yielding
   them back in chronological order. Configure that with
-  `PMXT_PREFETCH_WORKERS` (default `4`).
+  `PMXT_PREFETCH_WORKERS` (default `16`, capped by the number of hourly files
+  in the requested window).
 - Cache controls:
   - `PMXT_CACHE_DIR=1` enables disk cache at `~/.cache/nautilus_trader/pmxt`
   - `PMXT_CACHE_DIR=/custom/path` enables disk cache at a custom root
@@ -278,8 +300,11 @@ PMXT_CACHE_DIR=1 END_TIME=2026-03-16T13:00:00Z LOOKBACK_HOURS=2 MIN_PRICE_RANGE=
 - Validation on 2026-03-19 using the same market over 48 hours
   (`END_TIME=2026-03-16T13:00:00Z`, `LOOKBACK_HOURS=48`,
   `MIN_PRICE_RANGE=0`, `TRADE_SIZE=1`, `PMXT_CACHE_DIR=1`):
-  - the first `polymarket_pmxt_ema_crossover.py` run populated `50` cached
+  - with the older `4` worker default, the first
+    `polymarket_pmxt_ema_crossover.py` cold-cache run populated `50` cached
     hourly parquet files in about `12m 50s` end to end
+  - a follow-up 2026-03-20 benchmark with `PMXT_PREFETCH_WORKERS=16` cut that
+    same 48-hour cold path to about `11m 46s`
   - the warmed cache footprint for that full 48-hour slice was about `1.6 MB`
   - fresh warm cached end-to-end reruns on the same slice:
     `ema_crossover` about `1.1s` with `32819` quotes, `26` fills, `PnL -0.0880`

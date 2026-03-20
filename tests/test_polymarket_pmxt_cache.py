@@ -35,13 +35,13 @@ def test_resolve_prefetch_workers_parses_env(monkeypatch):
     monkeypatch.delenv(
         PolymarketPMXTDataLoader._PMXT_PREFETCH_WORKERS_ENV, raising=False
     )
-    assert PolymarketPMXTDataLoader._resolve_prefetch_workers() == 4
+    assert PolymarketPMXTDataLoader._resolve_prefetch_workers() == 16
 
     monkeypatch.setenv(PolymarketPMXTDataLoader._PMXT_PREFETCH_WORKERS_ENV, "8")
     assert PolymarketPMXTDataLoader._resolve_prefetch_workers() == 8
 
     monkeypatch.setenv(PolymarketPMXTDataLoader._PMXT_PREFETCH_WORKERS_ENV, "invalid")
-    assert PolymarketPMXTDataLoader._resolve_prefetch_workers() == 4
+    assert PolymarketPMXTDataLoader._resolve_prefetch_workers() == 16
 
 
 def test_resolve_http_tuning_parses_env(monkeypatch):
