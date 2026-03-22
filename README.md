@@ -26,6 +26,8 @@ Relay VPS:
 [![Relay mem](https://209-209-10-83.sslip.io/v1/badge/mem.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![Relay disk](https://209-209-10-83.sslip.io/v1/badge/disk.svg)](https://209-209-10-83.sslip.io/v1/system)
 
+# This is still in development. Relay backtests may not work until I get it all sorted out.
+
 Backtesting framework for prediction market trading strategies on [Kalshi](https://kalshi.com) and [Polymarket](https://polymarket.com), built off of [NautilusTrader](https://github.com/nautechsystems/nautilus_trader) with custom exchange adapters. More focus on Polymarket because of the free availability of L2 data.
 
 Fantastic single & multi-market charting. Featuring: equity (total & individual markets), profit / loss ticks, P&L periodic bars, market allocation, YES price (with green buy and red sell fills), drawdown, sharpe (with above/below shading), cash / equity, monthly returns, and cumulative brier advantage.
@@ -310,8 +312,8 @@ backtest schema:
 - keep polling the PMXT archive index for new hours
 - precompute one canonical processed parquet per hour with extracted
   `market_id` and `token_id` columns
-- lazily materialize the tiny filtered `(condition_id, token_id, hour)` parquet
-  only when a backtest actually requests it
+- eagerly prebuild the tiny filtered `(condition_id, token_id, hour)` parquet
+  files on the server so backtests can pull them directly
 - serve those filtered files over HTTP
 - let the PMXT loader fetch those filtered files directly with
   `PMXT_RELAY_BASE_URL`
@@ -338,13 +340,14 @@ Relay layout:
 On the VPS, point `PMXT_RELAY_DATA_DIR` somewhere larger such as
 `/srv/pmxt-relay`.
 
-Two long-running processes are expected:
+Three long-running processes are expected:
 
 - API server: `uv run python -m pmxt_relay api`
 - mirror/precompute worker: `uv run python -m pmxt_relay worker`
+- filtered prebuild worker: `uv run python -m pmxt_relay prebuild-filtered`
 
-Systemd examples live in [`pmxt_relay/systemd/`](pmxt_relay/systemd/) so both
-services can come back automatically after reboot.
+Systemd examples live in [`pmxt_relay/systemd/`](pmxt_relay/systemd/) so all
+three services can come back automatically after reboot.
 
 For a public-facing relay, the shipped API now also:
 
@@ -369,7 +372,7 @@ Relay progress can be checked over HTTP:
   `/v1/badge/disk` for the live README status tags
 
 The relay mirrors the full PMXT archive and stores a single processed shard per
-hour alongside the on-demand filtered cache. Any single PMXT backtest only
+hour alongside a background-prebuilt filtered cache. Any single PMXT backtest only
 downloads the tiny per-`(condition_id, token_id, hour)` slices it needs. The
 point is that one backtest no longer has to scan or download the global hourly
 archive file just to recover one market.
