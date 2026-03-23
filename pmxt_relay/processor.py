@@ -250,7 +250,8 @@ class RelayHourProcessor:
         shutil.rmtree(temp_root, ignore_errors=True)
         temp_root.mkdir(parents=True, exist_ok=True)
 
-        total_rows = pq.ParquetFile(processed_path).metadata.num_rows
+        processed_path_str = str(processed_path)
+        artifacts: list[FilteredHourArtifact] = []
 
         try:
             con = duckdb.connect(":memory:")
@@ -258,72 +259,60 @@ class RelayHourProcessor:
             con.execute(f"SET memory_limit = '{self._config.duckdb_memory_limit}'")
             con.execute(f"SET temp_directory = '{temp_root}'")
 
-            # DuckDB writes one parquet file per (market_id, token_id)
-            # directly — no intermediate partition tree, no read-back.
-            con.execute(
-                f"""
-                COPY (
-                    SELECT market_id, token_id, update_type, data
-                    FROM parquet_scan('{processed_path}')
-                )
-                TO '{temp_root}/out'
-                (FORMAT PARQUET, PARTITION_BY (market_id, token_id),
-                 COMPRESSION ZSTD, OVERWRITE_OR_IGNORE)
-                """
-            )
-            con.close()
+            # Get unique keys first (lightweight metadata scan).
+            keys = con.execute(
+                "SELECT DISTINCT market_id, token_id "
+                "FROM parquet_scan(?) "
+                "ORDER BY market_id, token_id",
+                [processed_path_str],
+            ).fetchall()
 
+            total_keys = len(keys)
             if progress_callback is not None:
-                progress_callback(total_rows, total_rows)
+                progress_callback(0, total_keys)
 
-            # Walk the DuckDB partition output and move files to final paths.
-            artifacts: list[FilteredHourArtifact] = []
-            out_root = temp_root / "out"
-            for market_dir in sorted(out_root.iterdir()):
-                if not market_dir.is_dir():
-                    continue
-                # DuckDB Hive partition dir: market_id=<value>
-                condition_id = market_dir.name.split("=", 1)[1]
-                for token_dir in sorted(market_dir.iterdir()):
-                    if not token_dir.is_dir():
-                        continue
-                    token_id = token_dir.name.split("=", 1)[1]
-                    # DuckDB writes a single data_0.parquet per partition
-                    src_files = sorted(token_dir.glob("*.parquet"))
-                    if not src_files:
-                        continue
-                    output_path = filtered_root / filtered_relative_path(
-                        condition_id, token_id, filename
+            # For each key, filter and write one output file.
+            # DuckDB uses predicate pushdown on parquet row groups so only
+            # matching data is read per query — memory stays bounded.
+            for idx, (condition_id, token_id) in enumerate(keys):
+                output_path = filtered_root / filtered_relative_path(
+                    condition_id, token_id, filename
+                )
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = output_path.with_name(f"{output_path.name}.tmp")
+                try:
+                    con.execute(
+                        "COPY ("
+                        "SELECT update_type, data "
+                        "FROM parquet_scan(?) "
+                        "WHERE market_id = ? AND token_id = ?"
+                        ") TO ? (FORMAT PARQUET, COMPRESSION ZSTD)",
+                        [processed_path_str, condition_id, token_id, str(tmp_path)],
                     )
-                    output_path.parent.mkdir(parents=True, exist_ok=True)
-                    if len(src_files) == 1:
-                        # Single file — just move it
-                        os.replace(src_files[0], output_path)
-                    else:
-                        # Multiple files — concatenate (shouldn't happen with
-                        # OVERWRITE_OR_IGNORE but handle defensively)
-                        table = ds.dataset(src_files, format="parquet").to_table(
-                            columns=["update_type", "data"]
-                        )
-                        tmp_out = output_path.with_name(f"{output_path.name}.tmp")
-                        try:
-                            pq.write_table(table, tmp_out, compression="zstd")
-                            os.replace(tmp_out, output_path)
-                        finally:
-                            tmp_out.unlink(missing_ok=True)
-                    stat = output_path.stat()
-                    row_count = pq.ParquetFile(output_path).metadata.num_rows
-                    artifacts.append(
-                        FilteredHourArtifact(
-                            filename=filename,
-                            hour=hour,
-                            condition_id=condition_id,
-                            token_id=token_id,
-                            local_path=str(output_path),
-                            row_count=row_count,
-                            byte_size=stat.st_size,
-                        )
+                    os.replace(tmp_path, output_path)
+                except Exception:
+                    tmp_path.unlink(missing_ok=True)
+                    raise
+
+                stat = output_path.stat()
+                row_count = pq.ParquetFile(output_path).metadata.num_rows
+                artifacts.append(
+                    FilteredHourArtifact(
+                        filename=filename,
+                        hour=hour,
+                        condition_id=condition_id,
+                        token_id=token_id,
+                        local_path=str(output_path),
+                        row_count=row_count,
+                        byte_size=stat.st_size,
                     )
+                )
+                if progress_callback is not None and (idx + 1) % 500 == 0:
+                    progress_callback(idx + 1, total_keys)
+
+            con.close()
+            if progress_callback is not None:
+                progress_callback(total_keys, total_keys)
             return artifacts
         finally:
             shutil.rmtree(temp_root, ignore_errors=True)
