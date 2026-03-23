@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 
+import duckdb
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
@@ -244,38 +245,86 @@ class RelayHourProcessor:
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[FilteredHourArtifact]:
         hour = parse_archive_hour(filename).isoformat()
+        filtered_root = self._config.filtered_root
         temp_root = self._config.tmp_root / f"{filename}.prebuild.filtered"
-        partition_root = temp_root / "partitions"
         shutil.rmtree(temp_root, ignore_errors=True)
-        partition_root.mkdir(parents=True, exist_ok=True)
+        temp_root.mkdir(parents=True, exist_ok=True)
 
         total_rows = pq.ParquetFile(processed_path).metadata.num_rows
-        row_offset = 0
-        partition_counter = 0
 
         try:
-            dataset = ds.dataset(processed_path, format="parquet")
-            for batch in dataset.to_batches(
-                columns=["market_id", "token_id", "update_type", "data"],
-                batch_size=PREBUILD_BATCH_SIZE,
-                use_threads=True,
-            ):
-                if batch.num_rows == 0:
-                    continue
-                row_offset += batch.num_rows
-                self._write_partition_batch(
-                    batch,
-                    partition_root,
-                    basename_template=f"part-{partition_counter}-{{i}}.parquet",
+            con = duckdb.connect(":memory:")
+            con.execute(f"SET threads = {self._config.duckdb_threads}")
+            con.execute(f"SET memory_limit = '{self._config.duckdb_memory_limit}'")
+            con.execute(f"SET temp_directory = '{temp_root}'")
+
+            # DuckDB writes one parquet file per (market_id, token_id)
+            # directly — no intermediate partition tree, no read-back.
+            con.execute(
+                f"""
+                COPY (
+                    SELECT market_id, token_id, update_type, data
+                    FROM parquet_scan('{processed_path}')
                 )
-                partition_counter += 1
-                if progress_callback is not None:
-                    progress_callback(row_offset, total_rows)
-            del dataset
+                TO '{temp_root}/out'
+                (FORMAT PARQUET, PARTITION_BY (market_id, token_id),
+                 COMPRESSION ZSTD, OVERWRITE_OR_IGNORE)
+                """
+            )
+            con.close()
 
             if progress_callback is not None:
                 progress_callback(total_rows, total_rows)
-            return self._materialize_partition_tree(filename, hour, partition_root)
+
+            # Walk the DuckDB partition output and move files to final paths.
+            artifacts: list[FilteredHourArtifact] = []
+            out_root = temp_root / "out"
+            for market_dir in sorted(out_root.iterdir()):
+                if not market_dir.is_dir():
+                    continue
+                # DuckDB Hive partition dir: market_id=<value>
+                condition_id = market_dir.name.split("=", 1)[1]
+                for token_dir in sorted(market_dir.iterdir()):
+                    if not token_dir.is_dir():
+                        continue
+                    token_id = token_dir.name.split("=", 1)[1]
+                    # DuckDB writes a single data_0.parquet per partition
+                    src_files = sorted(token_dir.glob("*.parquet"))
+                    if not src_files:
+                        continue
+                    output_path = filtered_root / filtered_relative_path(
+                        condition_id, token_id, filename
+                    )
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    if len(src_files) == 1:
+                        # Single file — just move it
+                        os.replace(src_files[0], output_path)
+                    else:
+                        # Multiple files — concatenate (shouldn't happen with
+                        # OVERWRITE_OR_IGNORE but handle defensively)
+                        table = ds.dataset(src_files, format="parquet").to_table(
+                            columns=["update_type", "data"]
+                        )
+                        tmp_out = output_path.with_name(f"{output_path.name}.tmp")
+                        try:
+                            pq.write_table(table, tmp_out, compression="zstd")
+                            os.replace(tmp_out, output_path)
+                        finally:
+                            tmp_out.unlink(missing_ok=True)
+                    stat = output_path.stat()
+                    row_count = pq.ParquetFile(output_path).metadata.num_rows
+                    artifacts.append(
+                        FilteredHourArtifact(
+                            filename=filename,
+                            hour=hour,
+                            condition_id=condition_id,
+                            token_id=token_id,
+                            local_path=str(output_path),
+                            row_count=row_count,
+                            byte_size=stat.st_size,
+                        )
+                    )
+            return artifacts
         finally:
             shutil.rmtree(temp_root, ignore_errors=True)
 
