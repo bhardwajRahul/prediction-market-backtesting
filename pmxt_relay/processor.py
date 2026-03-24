@@ -258,6 +258,7 @@ class RelayHourProcessor:
             con.execute(f"SET threads = {self._config.duckdb_threads}")
             con.execute(f"SET memory_limit = '{self._config.duckdb_memory_limit}'")
             con.execute(f"SET temp_directory = '{temp_root}'")
+            con.execute("SET preserve_insertion_order = false")
 
             # Get unique keys (lightweight metadata scan).
             keys = con.execute(
