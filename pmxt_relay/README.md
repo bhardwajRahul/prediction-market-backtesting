@@ -229,6 +229,13 @@ Common env vars:
 - `PMXT_RELAY_EXPOSE_RAW=0`
 - `PMXT_RELAY_API_RATE_LIMIT_PER_MINUTE=2400`
 - `PMXT_RELAY_API_LIST_MAX_HOURS=2000`
+- `PMXT_RELAY_ARCHIVE_STALE_PAGES=9999` — how many consecutive already-known
+  archive listing pages the worker will scan through before stopping. Default is
+  3, which is fine when the relay is already caught up. Set high (e.g. 9999) to
+  ensure the worker crawls the entire PMXT archive listing on every cycle, so no
+  historical hours are missed.
+- `PMXT_RELAY_ARCHIVE_MAX_PAGES=0` — hard cap on archive listing pages to scan
+  per cycle. 0 (default) means unlimited.
 
 ## Systemd
 
