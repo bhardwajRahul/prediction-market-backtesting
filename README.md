@@ -27,7 +27,7 @@ Relay VPS:
 [![Relay mem](https://209-209-10-83.sslip.io/v1/badge/mem.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![Relay disk](https://209-209-10-83.sslip.io/v1/badge/disk.svg)](https://209-209-10-83.sslip.io/v1/system)
 
-# This is still in development. Relay backtests may not work until I get it all sorted out.
+# Note: This is still in development
 
 Backtesting framework for prediction market trading strategies on [Kalshi](https://kalshi.com) and [Polymarket](https://polymarket.com), built off of [NautilusTrader](https://github.com/nautechsystems/nautilus_trader) with custom exchange adapters. More focus on Polymarket because of the free availability of L2 data.
 
@@ -191,14 +191,15 @@ data are:
 
 ### Limits
 
-- This is a conservative taker-execution proxy, not full order-book replay.
-- Historical backtests here do not model queue position, full L2 depth, or
-  exact partial-sweep behavior.
+- Kalshi backtests are trade-tick replay only (conservative taker-execution
+  proxy). Polymarket PMXT-backed backtests are full L2 order-book replay.
+- Neither path models queue position for passive/maker orders — public L2 MBP
+  data does not reveal where a resting order sits in the queue.
 - Taker-heavy strategies that try to harvest very small price changes can look
   much worse once fees and one-tick slippage are turned on.
-- PMXT improves Polymarket taker fills materially, but passive-order fills are
-  still approximate because public L2 MBP data cannot tell you your exact place
-  in queue.
+- PMXT L2 data is useful for modeling taker slippage (book depth tells you how
+  far a market order walks through levels), but maker fill probability requires
+  L3 data we don't have.
 
 ### PMXT Polymarket L2
 
@@ -306,20 +307,22 @@ The repo now includes a self-hosted relay implementation under
 
 > PLEASE do NOT try to break into the VPS. There is nothing valuable on it; it is a mirror to speed things up. With this, please do not misuse the API. It's here for you to use, not abuse.
 
-> The public relay has 4TB of storage, 6 GB of ram, and 4 shared vCPU's
+> The public relay has 4 TB of storage, 6 GB of RAM, and 4 shared vCPUs.
 
 The relay is built to solve the PMXT cold-start problem without changing the
-backtest schema:
+backtest schema. Three pipeline stages run continuously:
 
-- mirror every raw hourly PMXT parquet file
-- keep polling the PMXT archive index for new hours
-- precompute one canonical processed parquet per hour with extracted
-  `market_id` and `token_id` columns
-- eagerly prebuild the tiny filtered `(condition_id, token_id, hour)` parquet
-  files on the server so backtests can pull them directly
-- serve those filtered files over HTTP
-- let the PMXT loader fetch those filtered files directly with
-  `PMXT_RELAY_BASE_URL`
+1. **Mirror** — poll the PMXT archive index and download every raw hourly
+   parquet file
+2. **Shard** — extract `market_id` and `token_id` columns from the raw JSON
+   into one canonical processed parquet per hour
+3. **Prebuild** — split each processed hour into ~37K tiny filtered
+   `(condition_id, token_id, hour)` parquet files so backtests can pull only
+   the markets they need. Newest hours are prebuilt first so recent data is
+   available quickly while the backlog fills in.
+
+The filtered output is served over HTTP and the PMXT loader fetches it
+directly via `PMXT_RELAY_BASE_URL`.
 
 The filtered output keeps the same two columns the loader already consumes:
 
@@ -442,7 +445,7 @@ Unlike git submodules, subtrees copy upstream code directly into this repo — t
 - [x] fee modeling [PR#4](https://github.com/ben-gramling/nautilus_pm/pull/4)
 - [ ] total slippage modeling *** PMXT L2 data is good for taker modeling, but we can't model maker w/o L3 [PR#6](https://github.com/ben-gramling/nautilus_pm/pull/6), [PR#9](https://github.com/evan-kolberg/prediction-market-backtesting/pull/9)
 - [x] polymarket L2 order book backtests [PR#10](https://github.com/evan-kolberg/prediction-market-backtesting/pull/10)
-- [x] public relay on a VPS for pre-crunching book data from PMXT -- massively speeds up backtests [PR#17](https://github.com/evan-kolberg/prediction-market-backtesting/pull/17), [PR#18](https://github.com/evan-kolberg/prediction-market-backtesting/pull/18), [PR#19](https://github.com/evan-kolberg/prediction-market-backtesting/pull/19), [PR#20](https://github.com/evan-kolberg/prediction-market-backtesting/pull/20)
+- [x] public relay on a VPS for pre-crunching book data from PMXT -- massively speeds up backtests [PR#17](https://github.com/evan-kolberg/prediction-market-backtesting/pull/17), [PR#18](https://github.com/evan-kolberg/prediction-market-backtesting/pull/18), [PR#19](https://github.com/evan-kolberg/prediction-market-backtesting/pull/19), [PR#20](https://github.com/evan-kolberg/prediction-market-backtesting/pull/20), [PR#21](https://github.com/evan-kolberg/prediction-market-backtesting/pull/21)
 - [ ] kalshi L2 order book backtests **** we don't have this data yet
 - [x] much better & informative charting [PR#5](https://github.com/ben-gramling/nautilus_pm/pull/5)
 
