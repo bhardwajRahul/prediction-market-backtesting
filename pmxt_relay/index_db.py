@@ -28,7 +28,7 @@ class FilteredHourArtifact:
 class RelayIndex:
     def __init__(self, db_path: Path, *, event_retention: int = 50000) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
+        self._conn = sqlite3.connect(db_path, timeout=60, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._event_retention = event_retention
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -187,7 +187,8 @@ class RelayIndex:
                     """
                     UPDATE archive_hours
                     SET mirror_status = 'pending',
-                        last_error = COALESCE(last_error, 'mirror interrupted by restart')
+                        last_error = COALESCE(last_error, 'mirror interrupted by restart'),
+                        error_count = error_count + 1
                     WHERE mirror_status = 'processing'
                     """
                 )
@@ -199,7 +200,8 @@ class RelayIndex:
                     """
                     UPDATE archive_hours
                     SET process_status = 'pending',
-                        last_error = COALESCE(last_error, 'processing interrupted by restart')
+                        last_error = COALESCE(last_error, 'processing interrupted by restart'),
+                        error_count = error_count + 1
                     WHERE process_status = 'processing'
                     """
                 )
@@ -211,7 +213,8 @@ class RelayIndex:
                     """
                     UPDATE archive_hours
                     SET prebuild_status = 'pending',
-                        last_error = COALESCE(last_error, 'prebuild interrupted by restart')
+                        last_error = COALESCE(last_error, 'prebuild interrupted by restart'),
+                        error_count = error_count + 1
                     WHERE prebuild_status = 'processing'
                     """
                 )
