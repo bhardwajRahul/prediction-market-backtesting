@@ -31,6 +31,8 @@ Data sources:
 
 """
 
+# ruff: noqa: E402
+
 import asyncio
 import os
 import sys
@@ -38,6 +40,13 @@ from decimal import Decimal
 from pathlib import Path
 
 import pandas as pd
+
+try:
+    from ._script_helpers import ensure_repo_root
+except ImportError:
+    from _script_helpers import ensure_repo_root
+
+ensure_repo_root(__file__)
 
 from nautilus_trader.adapters.polymarket import POLYMARKET_VENUE
 from nautilus_trader.adapters.polymarket import PolymarketDataLoader
