@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pyarrow as pa
@@ -265,6 +266,108 @@ def test_iter_market_tables_preserves_hour_order(tmp_path):
     assert [hour for hour, _ in yielded] == hours
     assert [table.to_pylist()[0]["data"] for _, table in yielded] == [
         hour.isoformat() for hour in hours
+    ]
+
+
+def test_event_sort_key_orders_book_updates_before_quotes(monkeypatch):
+    class _FakeOrderBookDeltas:
+        def __init__(self, ts_event: int, ts_init: int) -> None:
+            self.ts_event = ts_event
+            self.ts_init = ts_init
+
+    class _FakeQuoteTick:
+        def __init__(self, ts_event: int, ts_init: int) -> None:
+            self.ts_event = ts_event
+            self.ts_init = ts_init
+
+    monkeypatch.setattr(pmxt_module, "OrderBookDeltas", _FakeOrderBookDeltas)
+    monkeypatch.setattr(pmxt_module, "QuoteTick", _FakeQuoteTick)
+
+    quote = _FakeQuoteTick(ts_event=10, ts_init=11)
+    delta = _FakeOrderBookDeltas(ts_event=10, ts_init=20)
+
+    ordered = sorted(
+        [quote, delta],
+        key=PolymarketPMXTDataLoader._event_sort_key,
+    )
+
+    assert ordered == [delta, quote]
+
+
+def test_load_order_book_and_quotes_keeps_snapshot_before_quote(monkeypatch, tmp_path):
+    loader = _make_loader(tmp_path)
+    loader._instrument = SimpleNamespace(id="POLYMARKET.TEST")
+    hour = pd.Timestamp("2026-03-16T12:00:00Z")
+
+    class _FakeOrderBook:
+        def __init__(self, instrument_id, book_type):  # type: ignore[no-untyped-def]
+            self.instrument_id = instrument_id
+            self.book_type = book_type
+
+    class _FakeOrderBookDeltas:
+        def __init__(self, ts_event: int, ts_init: int) -> None:
+            self.ts_event = ts_event
+            self.ts_init = ts_init
+
+    class _FakeQuoteTick:
+        def __init__(self, ts_event: int, ts_init: int) -> None:
+            self.ts_event = ts_event
+            self.ts_init = ts_init
+
+    monkeypatch.setattr(pmxt_module, "OrderBook", _FakeOrderBook)
+    monkeypatch.setattr(pmxt_module, "OrderBookDeltas", _FakeOrderBookDeltas)
+    monkeypatch.setattr(pmxt_module, "QuoteTick", _FakeQuoteTick)
+
+    loader._archive_hours = lambda _start, _end: [hour]  # type: ignore[method-assign]
+    loader._iter_market_batches = (  # type: ignore[method-assign]
+        lambda hours, *, batch_size: iter(
+            [
+                (
+                    hour,
+                    [
+                        pa.record_batch(
+                            [
+                                pa.array(["book_snapshot"]),
+                                pa.array(['{"token_id":"token-yes-123"}']),
+                            ],
+                            names=["update_type", "data"],
+                        )
+                    ],
+                )
+            ]
+        )
+    )
+
+    def _process_book_snapshot(  # type: ignore[no-untyped-def]
+        payload_text,
+        *,
+        token_id,
+        instrument,
+        local_book,
+        has_snapshot,
+        events,
+        start_ns,
+        end_ns,
+        include_order_book,
+        include_quotes,
+    ):
+        del payload_text, token_id, instrument, has_snapshot, start_ns, end_ns
+        if include_order_book:
+            events.append(_FakeOrderBookDeltas(ts_event=10, ts_init=20))
+        if include_quotes:
+            events.append(_FakeQuoteTick(ts_event=10, ts_init=11))
+        return local_book, True
+
+    monkeypatch.setattr(loader, "_process_book_snapshot", _process_book_snapshot)
+
+    data = loader.load_order_book_and_quotes(
+        hour,
+        hour + pd.Timedelta(hours=1),
+    )
+
+    assert [type(record).__name__ for record in data] == [
+        "_FakeOrderBookDeltas",
+        "_FakeQuoteTick",
     ]
 
 

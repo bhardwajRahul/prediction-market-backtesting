@@ -632,6 +632,18 @@ class PolymarketPMXTDataLoader(PolymarketDataLoader):
             timestamp=PolymarketPMXTDataLoader._timestamp_to_ms_string(payload.timestamp),
         )
 
+    @staticmethod
+    def _event_sort_key(record: OrderBookDeltas | QuoteTick) -> tuple[int, int, int]:
+        ts_event = int(getattr(record, "ts_event", getattr(record, "ts_init", 0)))
+        ts_init = int(getattr(record, "ts_init", ts_event))
+        if isinstance(record, OrderBookDeltas):
+            priority = 0
+        elif isinstance(record, QuoteTick):
+            priority = 1
+        else:
+            priority = 2
+        return (ts_event, priority, ts_init)
+
     def _process_book_snapshot(
         self,
         payload_text: str,
@@ -793,7 +805,5 @@ class PolymarketPMXTDataLoader(PolymarketDataLoader):
                             include_quotes=include_quotes,
                         )
 
-        events.sort(
-            key=lambda record: int(getattr(record, "ts_init", getattr(record, "ts_event", 0)))
-        )
+        events.sort(key=self._event_sort_key)
         return events
