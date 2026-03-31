@@ -302,6 +302,12 @@ https://209-209-10-83.sslip.io/v1/filtered/<condition_id>/<token_id>/polymarket_
 du -sh ~/.cache/nautilus_trader/pmxt
 ```
 
+Or clear it with:
+
+```bash
+make clear-pmxt-cache
+```
+
 - Example: run a relay-backed PMXT backtest with the runner's bundled sample
   market/window and the default local cache:
 
