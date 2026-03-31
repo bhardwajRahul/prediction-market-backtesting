@@ -39,7 +39,7 @@ async def run_single_market_pmxt_backtest(
     name: str,
     market_slug: str,
     token_index: int = 0,
-    lookback_hours: float,
+    lookback_hours: float | None = None,
     strategy_factory: StrategyFactory,
     probability_window: int,
     min_quotes: int = 0,
@@ -50,17 +50,42 @@ async def run_single_market_pmxt_backtest(
     emit_html: bool = True,
     return_chart_layout: bool = False,
     return_summary_series: bool = False,
-    end_time: pd.Timestamp | datetime | None = None,
+    start_time: pd.Timestamp | datetime | str | None = None,
+    end_time: pd.Timestamp | datetime | str | None = None,
 ) -> dict[str, Any] | None:
-    end = pd.Timestamp(end_time if end_time is not None else datetime.now(UTC))
-    if end.tzinfo is None:
-        end = end.tz_localize(UTC)
-    start = end - pd.Timedelta(hours=lookback_hours)
+    try:
+        end = pd.Timestamp(end_time if end_time is not None else datetime.now(UTC))
+        if end.tzinfo is None:
+            end = end.tz_localize(UTC)
+        else:
+            end = end.tz_convert(UTC)
+
+        if start_time is not None:
+            start = pd.Timestamp(start_time)
+            if start.tzinfo is None:
+                start = start.tz_localize(UTC)
+            else:
+                start = start.tz_convert(UTC)
+        elif lookback_hours is not None:
+            start = end - pd.Timedelta(hours=lookback_hours)
+        else:
+            raise ValueError("set START_TIME/END_TIME or LOOKBACK_HOURS")
+
+        if start >= end:
+            raise ValueError(
+                f"START_TIME {start.isoformat()} must be earlier than "
+                f"END_TIME {end.isoformat()}"
+            )
+    except Exception as exc:
+        print(f"Unable to resolve PMXT backtest window for {market_slug}: {exc}")
+        return
+
+    window_hours = (end - start) / pd.Timedelta(hours=1)
 
     print(
         f"Loading PMXT Polymarket market {market_slug} "
-        f"(token_index={token_index}, lookback={lookback_hours:.1f}h, "
-        f"window_end={end.isoformat()})..."
+        f"(token_index={token_index}, window_start={start.isoformat()}, "
+        f"window_end={end.isoformat()}, window_hours={window_hours:.1f})..."
     )
 
     try:

@@ -12,7 +12,6 @@ Late-favorite limit hold on one Polymarket market using PMXT historical L2 data.
 from __future__ import annotations
 
 import asyncio
-import os
 from decimal import Decimal
 
 try:
@@ -27,12 +26,8 @@ from strategies import QuoteTickLateFavoriteLimitHoldStrategy
 
 
 try:
-    from ._defaults import DEFAULT_INITIAL_CASH
-    from ._defaults import DEFAULT_POLYMARKET_MARKET_SLUG
     from ._polymarket_single_market_pmxt_runner import run_single_market_pmxt_backtest
 except ImportError:
-    from backtests.polymarket_quote_tick._defaults import DEFAULT_INITIAL_CASH
-    from backtests.polymarket_quote_tick._defaults import DEFAULT_POLYMARKET_MARKET_SLUG
     from backtests.polymarket_quote_tick._polymarket_single_market_pmxt_runner import (
         run_single_market_pmxt_backtest,
     )
@@ -43,42 +38,25 @@ DESCRIPTION = (
     "Late-favorite limit entry on a single Polymarket market using PMXT L2 data"
 )
 
-MARKET_SLUG = os.getenv(
-    "MARKET_SLUG",
-    DEFAULT_POLYMARKET_MARKET_SLUG,
-)
-LOOKBACK_HOURS = float(os.getenv("LOOKBACK_HOURS", "24"))
-TOKEN_INDEX = int(os.getenv("TOKEN_INDEX", "0"))
-MIN_QUOTES = int(os.getenv("MIN_QUOTES", "500"))
-MIN_PRICE_RANGE = float(os.getenv("MIN_PRICE_RANGE", "0.005"))
-END_TIME = os.getenv("END_TIME")
-
-ACTIVATION_START_TIME_NS = int(os.getenv("ACTIVATION_START_TIME_NS", "0"))
-MARKET_CLOSE_TIME_NS = int(os.getenv("MARKET_CLOSE_TIME_NS", "0"))
-ENTRY_PRICE = float(os.getenv("ENTRY_PRICE", "0.90"))
-
-TRADE_SIZE = Decimal(os.getenv("TRADE_SIZE", "25"))
-INITIAL_CASH = float(os.getenv("INITIAL_CASH", str(DEFAULT_INITIAL_CASH)))
-
 
 async def run() -> None:
     await run_single_market_pmxt_backtest(
         name=NAME,
-        market_slug=MARKET_SLUG,
-        token_index=TOKEN_INDEX,
-        lookback_hours=LOOKBACK_HOURS,
-        min_quotes=MIN_QUOTES,
-        min_price_range=MIN_PRICE_RANGE,
-        initial_cash=INITIAL_CASH,
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        token_index=0,
+        start_time="2026-03-19T07:35:57.277659Z",
+        end_time="2026-03-24T07:35:57.277659Z",
+        min_quotes=500,
+        min_price_range=0.005,
+        initial_cash=100.0,
         probability_window=10,
-        end_time=None if not END_TIME else END_TIME,
         strategy_factory=lambda instrument_id: QuoteTickLateFavoriteLimitHoldStrategy(
             config=QuoteTickLateFavoriteLimitHoldConfig(
                 instrument_id=instrument_id,
-                trade_size=TRADE_SIZE,
-                activation_start_time_ns=ACTIVATION_START_TIME_NS,
-                market_close_time_ns=MARKET_CLOSE_TIME_NS,
-                entry_price=ENTRY_PRICE,
+                trade_size=Decimal("25"),
+                activation_start_time_ns=1774326957277659000,
+                market_close_time_ns=1774337757277659000,
+                entry_price=0.90,
             ),
         ),
     )

@@ -144,22 +144,21 @@ Direct script execution is usually better once you know which runner you want:
 
 ```bash
 MARKET_TICKER=<kalshi-market-ticker> uv run python backtests/kalshi_trade_tick/kalshi_breakout.py
-MARKET_SLUG=<polymarket-market-slug> END_TIME=<utc-iso8601> LOOKBACK_HOURS=4 uv run python -m backtests.polymarket_quote_tick.polymarket_pmxt_relay_ema_crossover
+uv run python backtests/polymarket_quote_tick/polymarket_pmxt_relay_ema_crossover.py
 MARKET_SLUG=<polymarket-market-slug> uv run python backtests/polymarket_trade_tick/polymarket_vwap_reversion.py
 ```
 
 If you omit the market env vars, the public runners fall back to the defaults
-bundled in each module. The PMXT examples also ship with a fixed sample end
-time so the same historical window can be replayed repeatedly.
+bundled in each module. The PMXT single-market relay runners are intentionally
+pinned to one relay-backed historical slice in code so they still replay cleanly
+without the latest upstream PMXT hours.
 
 Most runners are configured through environment variables. Common ones:
 
 - `MARKET_TICKER` for Kalshi single-market runners
-- `MARKET_SLUG` for Polymarket single-market runners
+- `MARKET_SLUG` for Polymarket trade-tick single-market runners
 - `TOKEN_INDEX` to choose which Polymarket outcome token to backtest
 - `LOOKBACK_DAYS` for data window size
-- `LOOKBACK_HOURS` for PMXT L2 runners
-- `END_TIME` to pin a PMXT run to a specific historical window end
 - `PMXT_RELAY_BASE_URL` to override the default public relay or disable it
   with `PMXT_RELAY_BASE_URL=0`
 - `PMXT_CACHE_DIR` / `PMXT_DISABLE_CACHE` to control the local PMXT filtered
@@ -236,12 +235,12 @@ https://209-209-10-83.sslip.io/v1/filtered/<condition_id>/<token_id>/polymarket_
   relay data model at the strategy or runner layer.
 - The loader still scans one extra hour before the requested start so it can
   find a valid snapshot and rebuild the book. File count is therefore roughly
-  `LOOKBACK_HOURS + 2`.
+  `requested_window_hours + 2`.
 - Example file counts:
-  - `LOOKBACK_HOURS=2` needs about 4 hourly files
-  - `LOOKBACK_HOURS=4` needs about 6 hourly files
-  - `LOOKBACK_HOURS=24` needs about 26 hourly files
-  - `LOOKBACK_HOURS=48` needs about 50 hourly files
+  - a 2-hour window needs about 4 hourly files
+  - a 4-hour window needs about 6 hourly files
+  - a 24-hour window needs about 26 hourly files
+  - a 48-hour window needs about 50 hourly files
 - When the loader has to fall back to raw PMXT, it is still expensive:
   - it opens each remote parquet file over HTTPS and uses range requests
   - parquet pushdown can prune by `market_id` and `update_type`
@@ -307,8 +306,7 @@ du -sh ~/.cache/nautilus_trader/pmxt
   market/window and the default local cache:
 
 ```bash
-LOOKBACK_HOURS=4 MIN_PRICE_RANGE=0 TRADE_SIZE=10 \
-  uv run python backtests/polymarket_quote_tick/polymarket_pmxt_relay_ema_crossover.py
+uv run python backtests/polymarket_quote_tick/polymarket_pmxt_relay_ema_crossover.py
 ```
 
 - If the relay does not have a requested hour yet, the loader still falls back

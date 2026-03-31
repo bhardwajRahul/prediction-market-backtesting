@@ -31,6 +31,11 @@ from nautilus_trader.model.identifiers import Venue
 
 
 INSTRUMENT_ID = InstrumentId(Symbol("PM-TEST-YES"), Venue("POLYMARKET"))
+EXPECTED_MARKET_SLUG = (
+    "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
+)
+EXPECTED_START_TIME = "2026-03-19T07:35:57.277659Z"
+EXPECTED_END_TIME = "2026-03-24T07:35:57.277659Z"
 
 
 @pytest.mark.parametrize(
@@ -113,6 +118,11 @@ def test_pmxt_backtests_build_expected_quote_tick_strategy(
     assert isinstance(strategy, strategy_cls)
     assert isinstance(strategy.config, config_cls)
     assert captured["name"] == module.NAME
-    assert captured["market_slug"] == module.MARKET_SLUG
-    assert captured["token_index"] == module.TOKEN_INDEX
-    assert captured["lookback_hours"] == module.LOOKBACK_HOURS
+    assert captured["market_slug"] == EXPECTED_MARKET_SLUG
+    assert captured["token_index"] == 0
+    assert captured["start_time"] == EXPECTED_START_TIME
+    assert captured["end_time"] == EXPECTED_END_TIME
+    assert captured["min_quotes"] == 500
+    assert captured["min_price_range"] == 0.005
+    assert captured["initial_cash"] == 100.0
+    assert "lookback_hours" not in captured

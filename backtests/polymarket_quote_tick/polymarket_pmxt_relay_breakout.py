@@ -12,7 +12,6 @@ Breakout strategy on one Polymarket market using PMXT historical L2 data.
 from __future__ import annotations
 
 import asyncio
-import os
 from decimal import Decimal
 
 try:
@@ -27,12 +26,8 @@ from strategies import QuoteTickBreakoutStrategy
 
 
 try:
-    from ._defaults import DEFAULT_INITIAL_CASH
-    from ._defaults import DEFAULT_POLYMARKET_MARKET_SLUG
     from ._polymarket_single_market_pmxt_runner import run_single_market_pmxt_backtest
 except ImportError:
-    from backtests.polymarket_quote_tick._defaults import DEFAULT_INITIAL_CASH
-    from backtests.polymarket_quote_tick._defaults import DEFAULT_POLYMARKET_MARKET_SLUG
     from backtests.polymarket_quote_tick._polymarket_single_market_pmxt_runner import (
         run_single_market_pmxt_backtest,
     )
@@ -41,54 +36,31 @@ except ImportError:
 NAME = "polymarket_pmxt_relay_breakout"
 DESCRIPTION = "Volatility breakout on a single Polymarket market using PMXT L2 data"
 
-MARKET_SLUG = os.getenv(
-    "MARKET_SLUG",
-    DEFAULT_POLYMARKET_MARKET_SLUG,
-)
-LOOKBACK_HOURS = float(os.getenv("LOOKBACK_HOURS", "24"))
-TOKEN_INDEX = int(os.getenv("TOKEN_INDEX", "0"))
-MIN_QUOTES = int(os.getenv("MIN_QUOTES", "500"))
-MIN_PRICE_RANGE = float(os.getenv("MIN_PRICE_RANGE", "0.005"))
-END_TIME = os.getenv("END_TIME")
-
-WINDOW = int(os.getenv("WINDOW", "120"))
-BREAKOUT_STD = float(os.getenv("BREAKOUT_STD", "1.5"))
-BREAKOUT_BUFFER = float(os.getenv("BREAKOUT_BUFFER", "0.001"))
-MEAN_REVERSION_BUFFER = float(os.getenv("MEAN_REVERSION_BUFFER", "0.0005"))
-MIN_HOLDING_PERIODS = int(os.getenv("MIN_HOLDING_PERIODS", "20"))
-REENTRY_COOLDOWN = int(os.getenv("REENTRY_COOLDOWN", "80"))
-MAX_ENTRY_PRICE = float(os.getenv("MAX_ENTRY_PRICE", "0.92"))
-TAKE_PROFIT = float(os.getenv("TAKE_PROFIT", "0.015"))
-STOP_LOSS = float(os.getenv("STOP_LOSS", "0.020"))
-
-TRADE_SIZE = Decimal(os.getenv("TRADE_SIZE", "100"))
-INITIAL_CASH = float(os.getenv("INITIAL_CASH", str(DEFAULT_INITIAL_CASH)))
-
 
 async def run() -> None:
     await run_single_market_pmxt_backtest(
         name=NAME,
-        market_slug=MARKET_SLUG,
-        token_index=TOKEN_INDEX,
-        lookback_hours=LOOKBACK_HOURS,
-        min_quotes=MIN_QUOTES,
-        min_price_range=MIN_PRICE_RANGE,
-        initial_cash=INITIAL_CASH,
-        probability_window=WINDOW,
-        end_time=None if not END_TIME else END_TIME,
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        token_index=0,
+        start_time="2026-03-19T07:35:57.277659Z",
+        end_time="2026-03-24T07:35:57.277659Z",
+        min_quotes=500,
+        min_price_range=0.005,
+        initial_cash=100.0,
+        probability_window=120,
         strategy_factory=lambda instrument_id: QuoteTickBreakoutStrategy(
             config=QuoteTickBreakoutConfig(
                 instrument_id=instrument_id,
-                trade_size=TRADE_SIZE,
-                window=WINDOW,
-                breakout_std=BREAKOUT_STD,
-                breakout_buffer=BREAKOUT_BUFFER,
-                mean_reversion_buffer=MEAN_REVERSION_BUFFER,
-                min_holding_periods=MIN_HOLDING_PERIODS,
-                reentry_cooldown=REENTRY_COOLDOWN,
-                max_entry_price=MAX_ENTRY_PRICE,
-                take_profit=TAKE_PROFIT,
-                stop_loss=STOP_LOSS,
+                trade_size=Decimal("100"),
+                window=120,
+                breakout_std=1.5,
+                breakout_buffer=0.001,
+                mean_reversion_buffer=0.0005,
+                min_holding_periods=20,
+                reentry_cooldown=80,
+                max_entry_price=0.92,
+                take_profit=0.015,
+                stop_loss=0.020,
             ),
         ),
     )
