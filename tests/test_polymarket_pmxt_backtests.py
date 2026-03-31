@@ -31,6 +31,11 @@ from nautilus_trader.model.identifiers import Venue
 
 
 INSTRUMENT_ID = InstrumentId(Symbol("PM-TEST-YES"), Venue("POLYMARKET"))
+EXPECTED_MARKET_SLUG = (
+    "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
+)
+EXPECTED_START_TIME = "2026-03-19T07:35:57.277659Z"
+EXPECTED_END_TIME = "2026-03-24T07:35:57.277659Z"
 
 
 @pytest.mark.parametrize(
@@ -113,6 +118,81 @@ def test_pmxt_backtests_build_expected_quote_tick_strategy(
     assert isinstance(strategy, strategy_cls)
     assert isinstance(strategy.config, config_cls)
     assert captured["name"] == module.NAME
-    assert captured["market_slug"] == module.MARKET_SLUG
-    assert captured["token_index"] == module.TOKEN_INDEX
-    assert captured["lookback_hours"] == module.LOOKBACK_HOURS
+    assert captured["market_slug"] == EXPECTED_MARKET_SLUG
+    assert captured["token_index"] == 0
+    assert captured["start_time"] == EXPECTED_START_TIME
+    assert captured["end_time"] == EXPECTED_END_TIME
+    assert captured["min_quotes"] == 500
+    assert captured["min_price_range"] == 0.005
+    assert captured["initial_cash"] == 100.0
+    assert "lookback_hours" not in captured
+
+
+def test_pmxt_sports_backtest_uses_fixed_samples(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = importlib.import_module(
+        "backtests.polymarket_quote_tick.polymarket_pmxt_relay_sports_vwap_reversion"
+    )
+    captured_calls: list[dict[str, object]] = []
+
+    async def _fake_run_single_market_pmxt_backtest(**kwargs):  # type: ignore[no-untyped-def]
+        captured_calls.append(kwargs)
+        return {
+            "slug": kwargs["market_slug"],
+            "quotes": 1000,
+            "fills": 2,
+            "pnl": 1.25,
+            "chart_path": None,
+        }
+
+    monkeypatch.setattr(
+        module,
+        "run_single_market_pmxt_backtest",
+        _fake_run_single_market_pmxt_backtest,
+    )
+    combined_report_calls: list[dict[str, object]] = []
+    summary_report_calls: list[dict[str, object]] = []
+
+    monkeypatch.setattr(module, "print_backtest_summary", lambda **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "save_aggregate_backtest_report",
+        lambda **kwargs: summary_report_calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        module,
+        "save_combined_backtest_report",
+        lambda **kwargs: combined_report_calls.append(kwargs),
+    )
+
+    asyncio.run(module.run())
+
+    assert len(captured_calls) == len(module.SPORT_MARKET_SAMPLES)
+    for captured, sample in zip(
+        captured_calls,
+        module.SPORT_MARKET_SAMPLES,
+        strict=True,
+    ):
+        assert captured["name"] == module.NAME
+        assert captured["market_slug"] == sample["market_slug"]
+        assert captured["token_index"] == sample["token_index"]
+        assert captured["start_time"] == sample["start_time"]
+        assert captured["end_time"] == sample["end_time"]
+        assert captured["min_quotes"] == module.MIN_QUOTES
+        assert captured["min_price_range"] == module.MIN_PRICE_RANGE
+        assert captured["initial_cash"] == module.INITIAL_CASH
+        assert captured["probability_window"] == module.VWAP_WINDOW
+        assert "lookback_hours" not in captured
+
+        strategy = captured["strategy_factory"](INSTRUMENT_ID)
+        assert isinstance(strategy, QuoteTickVWAPReversionStrategy)
+        assert isinstance(strategy.config, QuoteTickVWAPReversionConfig)
+
+    assert len(combined_report_calls) == 1
+    assert combined_report_calls[0]["output_path"] == module.COMBINED_REPORT_PATH
+    assert len(combined_report_calls[0]["results"]) == len(module.SPORT_MARKET_SAMPLES)
+
+    assert len(summary_report_calls) == 1
+    assert summary_report_calls[0]["output_path"] == module.SUMMARY_REPORT_PATH
+    assert len(summary_report_calls[0]["results"]) == len(module.SPORT_MARKET_SAMPLES)

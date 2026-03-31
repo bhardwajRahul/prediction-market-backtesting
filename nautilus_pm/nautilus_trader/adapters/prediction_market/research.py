@@ -11,7 +11,7 @@
 #  KIND, either express or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 # -------------------------------------------------------------------------------------------------
-#  Modified by Evan Kolberg in this repository on 2026-03-11, 2026-03-15, and 2026-03-16.
+#  Modified by Evan Kolberg in this repository on 2026-03-11, 2026-03-15, 2026-03-16, and 2026-03-31.
 #  See the repository NOTICE file for provenance and licensing scope.
 #
 
@@ -20,21 +20,20 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Sequence
-from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from nautilus_trader.adapters.prediction_market.backtest_utils import (
+    _timestamp_to_naive_utc_datetime,
+)
 from nautilus_trader.adapters.prediction_market.backtest_utils import build_brier_inputs
 from nautilus_trader.adapters.prediction_market.backtest_utils import build_market_prices
 from nautilus_trader.adapters.prediction_market.backtest_utils import extract_price_points
 from nautilus_trader.adapters.prediction_market.backtest_utils import extract_realized_pnl
 from nautilus_trader.adapters.prediction_market.backtest_utils import infer_realized_outcome
-from nautilus_trader.adapters.prediction_market.backtest_utils import (
-    _timestamp_to_naive_utc_datetime,
-)
 from nautilus_trader.adapters.prediction_market.fill_model import PredictionMarketTakerFillModel
 from nautilus_trader.analysis import legacy_plot_adapter as legacy_plot_adapter
 from nautilus_trader.analysis.legacy_plot_adapter import build_legacy_backtest_layout
@@ -130,7 +129,11 @@ def _pairs_to_series(pairs: Sequence[tuple[str, float]] | Sequence[tuple[Any, fl
 
     series = pd.Series(
         [float(value) for _, value in pairs],
-        index=pd.to_datetime([ts for ts, _ in pairs], utc=True),
+        index=pd.to_datetime(
+            [ts for ts, _ in pairs],
+            format="mixed",
+            utc=True,
+        ),
     )
     series = pd.to_numeric(series, errors="coerce").dropna()
     if series.empty:
@@ -147,10 +150,7 @@ def _series_to_iso_pairs(series: pd.Series) -> list[tuple[str, float]]:
     if series.empty:
         return []
 
-    return [
-        (pd.Timestamp(ts).isoformat(), float(value))
-        for ts, value in series.items()
-    ]
+    return [(pd.Timestamp(ts).isoformat(), float(value)) for ts, value in series.items()]
 
 
 def _align_series_to_timeline(
@@ -203,7 +203,9 @@ def _serialize_fill_events(
 
     events: list[dict[str, Any]] = []
     for idx, (_, row) in enumerate(frame.iterrows(), start=1):
-        quantity = _parse_float_like(row.get("filled_qty", row.get("last_qty", row.get("quantity"))))
+        quantity = _parse_float_like(
+            row.get("filled_qty", row.get("last_qty", row.get("quantity")))
+        )
         if quantity <= 0.0:
             continue
 
@@ -264,7 +266,9 @@ def _deserialize_fill_events(
             models_module.Fill(
                 order_id=str(event.get("order_id") or f"fill-{idx}"),
                 market_id=market_id,
-                action=models_module.OrderAction.BUY if action == "buy" else models_module.OrderAction.SELL,
+                action=models_module.OrderAction.BUY
+                if action == "buy"
+                else models_module.OrderAction.SELL,
                 side=market_side,
                 price=float(event.get("price") or 0.0),
                 quantity=quantity,
@@ -293,7 +297,11 @@ def _aggregate_brier_frames(results: Sequence[dict[str, Any]]) -> dict[str, pd.D
             market_probabilities=market_series,
             outcomes=outcome_series,
         )
-        if frame.empty or "brier_advantage" not in frame or "cumulative_brier_advantage" not in frame:
+        if (
+            frame.empty
+            or "brier_advantage" not in frame
+            or "cumulative_brier_advantage" not in frame
+        ):
             continue
 
         frames[market_id] = frame
@@ -503,7 +511,9 @@ def save_combined_backtest_report(
     output_abs = Path(output_path).expanduser().resolve()
     output_abs.parent.mkdir(parents=True, exist_ok=True)
     first_html = chart_paths[0].read_text(encoding="utf-8")
-    head_match = re.search(r"<head[^>]*>(?P<head>.*)</head>", first_html, flags=re.IGNORECASE | re.DOTALL)
+    head_match = re.search(
+        r"<head[^>]*>(?P<head>.*)</head>", first_html, flags=re.IGNORECASE | re.DOTALL
+    )
     if head_match is None:
         raise ValueError(f"Unable to locate <head> in {chart_paths[0]}")
 
@@ -568,8 +578,7 @@ def save_aggregate_backtest_report(
         price_series = _pairs_to_series(result.get("price_series") or [])
         if not price_series.empty:
             market_prices[label] = [
-                (_to_legacy_datetime(ts), float(value))
-                for ts, value in price_series.items()
+                (_to_legacy_datetime(ts), float(value)) for ts, value in price_series.items()
             ]
             active_ranges[label] = (price_series.index[0], price_series.index[-1])
             timeline_points.update(price_series.index.to_list())

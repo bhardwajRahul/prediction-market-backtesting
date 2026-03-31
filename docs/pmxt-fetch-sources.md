@@ -15,10 +15,10 @@ Hours print in completion order (not chronological) because they're fetched conc
 
 ## Example output
 
-This is real output from a 120-hour deep value backtest on the `will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026` market, run on 2026-03-24. It shows all four source tiers in a single run:
+This is real output from a fixed-window 120-hour deep value backtest on the `will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026` market, run on 2026-03-24. It shows all four source tiers in a single run:
 
 ```
-Loading PMXT Polymarket market will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026 (token_index=0, lookback=120.0h, window_end=2026-03-24T07:35:57.277659+00:00)...
+Loading PMXT Polymarket market will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026 (token_index=0, window_start=2026-03-19T07:35:57.277659+00:00, window_end=2026-03-24T07:35:57.277659+00:00, window_hours=120.0)...
   2026-03-19T11:00:00+00:00   0.001s     214 rows  /Users/evankolberg/.cache/nautilus_trader/pmxt/0xe9674aadfabfa7171bcee4e38b66f1a7d7e0af538d3718301e7b3cf111e9b5dd/69497259499564904327437411778598106057943098225196700538590387556685558432215/polymarket_orderbook_2026-03-19T11.parquet
   2026-03-19T10:00:00+00:00   0.002s     207 rows  /Users/evankolberg/.cache/nautilus_trader/pmxt/0xe9674aadfabfa7171bcee4e38b66f1a7d7e0af538d3718301e7b3cf111e9b5dd/69497259499564904327437411778598106057943098225196700538590387556685558432215/polymarket_orderbook_2026-03-19T10.parquet
   2026-03-19T13:00:00+00:00   0.001s     341 rows  /Users/evankolberg/.cache/nautilus_trader/pmxt/0xe9674aadfabfa7171bcee4e38b66f1a7d7e0af538d3718301e7b3cf111e9b5dd/69497259499564904327437411778598106057943098225196700538590387556685558432215/polymarket_orderbook_2026-03-19T13.parquet
@@ -175,9 +175,13 @@ Or:
 uv run python backtests/_shared/_timing_test.py backtests/polymarket_quote_tick/polymarket_pmxt_relay_ema_crossover.py
 ```
 
-Environment variables control the market and window:
+The PMXT single-market relay runners are pinned in code to one known-good
+historical slice:
 
 ```bash
-MARKET_SLUG=some-market LOOKBACK_HOURS=80 END_TIME=2026-03-24T04:00:00Z \
-    uv run python backtests/_shared/_timing_test.py backtests/polymarket_quote_tick/polymarket_pmxt_relay_breakout.py
+uv run python backtests/_shared/_timing_test.py backtests/polymarket_quote_tick/polymarket_pmxt_relay_breakout.py
 ```
+
+Today that slice is `will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026`
+from `2026-03-19T07:35:57.277659Z` through `2026-03-24T07:35:57.277659Z`
+(120 hours).
