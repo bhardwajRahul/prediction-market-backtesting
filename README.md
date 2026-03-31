@@ -27,6 +27,8 @@ Relay VPS:
 [![Relay mem](https://209-209-10-83.sslip.io/v1/badge/mem.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![Relay disk](https://209-209-10-83.sslip.io/v1/badge/disk.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![PMXT rate](https://209-209-10-83.sslip.io/v1/badge/rate.svg?v=1)](https://209-209-10-83.sslip.io/v1/stats)
+[![PMXT file](https://209-209-10-83.sslip.io/v1/badge/prebuild-file.svg?v=1)](https://209-209-10-83.sslip.io/v1/events?limit=50)
+[![PMXT rows](https://209-209-10-83.sslip.io/v1/badge/prebuild-progress.svg?v=1)](https://209-209-10-83.sslip.io/v1/events?limit=50)
 
 If the rate fulls under 1 hr/hr, then that means the VPS will never catch up. Since this project became a lot more popular that I had expected, I may have to switch to somehting more sustainable like AWS. Still figuring this out.
 
@@ -405,8 +407,8 @@ Relay progress can be checked over HTTP:
   being crunched
 - `/v1/badge/status`, `/v1/badge/backfill`, `/v1/badge/mirrored`,
   `/v1/badge/processed`, `/v1/badge/rate`, `/v1/badge/latest`, `/v1/badge/lag`,
-  `/v1/badge/cpu`, `/v1/badge/mem`, and
-  `/v1/badge/disk` for the live README status tags
+  `/v1/badge/prebuild-file`, `/v1/badge/prebuild-progress`, `/v1/badge/cpu`,
+  `/v1/badge/mem`, and `/v1/badge/disk` for the live README status tags
 
 The relay mirrors the full PMXT archive and stores a single processed shard per
 hour alongside a background-prebuilt filtered cache. Any single PMXT backtest only
