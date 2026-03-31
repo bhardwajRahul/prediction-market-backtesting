@@ -5,7 +5,8 @@
 
 """
 Public multi-market example: run a quote-tick VWAP-reversion strategy across a
-small fixed set of Polymarket sports markets using PMXT historical L2 data.
+small fixed set of recent Polymarket sports futures using PMXT historical L2
+data.
 
 This runner is intentionally pinned to explicit historical windows so it does
 not depend on rolling upstream PMXT availability.
@@ -53,25 +54,39 @@ DESCRIPTION = (
 
 SPORT_MARKET_SAMPLES = (
     {
-        "market_slug": "nfl-kc-lac-2025-09-05",
+        "market_slug": "will-ukraine-qualify-for-the-2026-fifa-world-cup",
         "token_index": 0,
-        "outcome": "Chiefs",
-        "start_time": "2025-09-01T05:22:48Z",
-        "end_time": "2025-09-06T05:22:48Z",
+        "outcome": "Yes",
+        "start_time": "2026-03-12T23:53:59Z",
+        "end_time": "2026-03-26T23:53:59Z",
     },
     {
-        "market_slug": "nhl-buf-pit-2025-10-03",
+        "market_slug": "will-man-city-win-the-202526-champions-league",
         "token_index": 0,
-        "outcome": "Sabres",
-        "start_time": "2025-09-29T03:52:57Z",
-        "end_time": "2025-10-04T03:52:57Z",
+        "outcome": "Yes",
+        "start_time": "2026-03-04T01:28:17Z",
+        "end_time": "2026-03-18T01:28:17Z",
     },
     {
-        "market_slug": "nba-lal-gsw-2025-10-05",
+        "market_slug": "will-chelsea-win-the-202526-champions-league",
         "token_index": 0,
-        "outcome": "Lakers",
-        "start_time": "2025-10-01T05:06:27Z",
-        "end_time": "2025-10-06T05:06:27Z",
+        "outcome": "Yes",
+        "start_time": "2026-03-04T01:22:09Z",
+        "end_time": "2026-03-18T01:22:09Z",
+    },
+    {
+        "market_slug": "will-newcastle-win-the-202526-champions-league",
+        "token_index": 0,
+        "outcome": "Yes",
+        "start_time": "2026-03-04T22:56:01Z",
+        "end_time": "2026-03-18T22:56:01Z",
+    },
+    {
+        "market_slug": "will-leverkusen-win-the-202526-champions-league",
+        "token_index": 0,
+        "outcome": "Yes",
+        "start_time": "2026-03-04T01:28:15Z",
+        "end_time": "2026-03-18T01:28:15Z",
     },
 )
 
@@ -88,7 +103,7 @@ TRADE_SIZE = Decimal("100")
 INITIAL_CASH = float(DEFAULT_INITIAL_CASH)
 CHART_RESAMPLE_RULE = None
 EMIT_HTML = True
-COMBINED_REPORT = False
+COMBINED_REPORT = True
 COMBINED_REPORT_PATH = f"output/{NAME}_combined_legacy.html"
 SUMMARY_REPORT = True
 SUMMARY_REPORT_PATH = f"output/{NAME}_multi_market.html"

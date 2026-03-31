@@ -151,8 +151,9 @@ MARKET_SLUG=<polymarket-market-slug> uv run python backtests/polymarket_trade_ti
 If you omit the market env vars, the public runners fall back to the defaults
 bundled in each module. The PMXT single-market relay runners are intentionally
 pinned to one relay-backed historical slice in code, and the PMXT sports
-multi-market example is pinned to a small fixed sports sample set, so those
-examples still replay cleanly without the latest upstream PMXT hours.
+multi-market example is pinned to a small fixed set of recent March 2026 sports
+futures with explicit multi-day windows, so those examples still replay cleanly
+without the latest upstream PMXT hours.
 
 Most runners are configured through environment variables. Common ones:
 
@@ -426,6 +427,8 @@ PMXT single-market runners do the same. Example outputs:
 - `output/polymarket_pmxt_relay_breakout_<market>_legacy.html`
 - `output/polymarket_pmxt_relay_rsi_reversion_<market>_legacy.html`
 - `output/polymarket_pmxt_relay_spread_capture_<market>_legacy.html`
+- `output/polymarket_pmxt_relay_sports_vwap_reversion_combined_legacy.html`
+- `output/polymarket_pmxt_relay_sports_vwap_reversion_multi_market.html`
 
 Multi-market plotting examples are still available under the archived
 [`backtests/polymarket_trade_tick/`](backtests/polymarket_trade_tick) set:

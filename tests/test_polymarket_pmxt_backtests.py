@@ -151,16 +151,19 @@ def test_pmxt_sports_backtest_uses_fixed_samples(
         "run_single_market_pmxt_backtest",
         _fake_run_single_market_pmxt_backtest,
     )
+    combined_report_calls: list[dict[str, object]] = []
+    summary_report_calls: list[dict[str, object]] = []
+
     monkeypatch.setattr(module, "print_backtest_summary", lambda **kwargs: None)
     monkeypatch.setattr(
         module,
         "save_aggregate_backtest_report",
-        lambda **kwargs: None,
+        lambda **kwargs: summary_report_calls.append(kwargs),
     )
     monkeypatch.setattr(
         module,
         "save_combined_backtest_report",
-        lambda **kwargs: None,
+        lambda **kwargs: combined_report_calls.append(kwargs),
     )
 
     asyncio.run(module.run())
@@ -185,3 +188,11 @@ def test_pmxt_sports_backtest_uses_fixed_samples(
         strategy = captured["strategy_factory"](INSTRUMENT_ID)
         assert isinstance(strategy, QuoteTickVWAPReversionStrategy)
         assert isinstance(strategy.config, QuoteTickVWAPReversionConfig)
+
+    assert len(combined_report_calls) == 1
+    assert combined_report_calls[0]["output_path"] == module.COMBINED_REPORT_PATH
+    assert len(combined_report_calls[0]["results"]) == len(module.SPORT_MARKET_SAMPLES)
+
+    assert len(summary_report_calls) == 1
+    assert summary_report_calls[0]["output_path"] == module.SUMMARY_REPORT_PATH
+    assert len(summary_report_calls[0]["results"]) == len(module.SPORT_MARKET_SAMPLES)
