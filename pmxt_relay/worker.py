@@ -41,6 +41,9 @@ class RelayWorker:
         self._skip_prebuild = skip_prebuild
         self._config.ensure_directories()
         self._index = RelayIndex(config.db_path, event_retention=config.event_retention)
+        self._clickhouse_retry_resets: set[str] = set()
+        if config.uses_clickhouse_filtered_store and reset_inflight and reset_process_inflight:
+            self._clickhouse_retry_resets = set(self._index.list_processing_filenames())
         reset_mirror, reset_process, reset_prebuild = self._index.initialize(
             reset_inflight=reset_inflight,
             reset_mirror_inflight=reset_mirror_inflight,
@@ -472,10 +475,16 @@ class RelayWorker:
                 payload={"raw_path": str(raw_path)},
             )
             try:
-                if self._clickhouse is not None and self._clickhouse.hour_data_exists(
-                    filename
-                ):
+                needs_clickhouse_reset = (
+                    self._clickhouse is not None
+                    and (
+                        str(row["process_status"]) == "error"
+                        or filename in self._clickhouse_retry_resets
+                    )
+                )
+                if needs_clickhouse_reset:
                     self._clickhouse.reset_hour(filename)
+                    self._clickhouse_retry_resets.discard(filename)
                 result = self._processor.process_hour(
                     filename,
                     raw_path,

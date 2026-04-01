@@ -9,7 +9,7 @@ repo.
 
 The relay API now has an explicit filtered-hour store seam in code, so the HTTP
 surface can stay stable while the backend moves away from tiny filesystem
-shards and toward a database-backed query path.
+fanout and toward a database-backed query path.
 
 What it does:
 
@@ -109,7 +109,7 @@ The worker handles discovery, mirroring, and ClickHouse ingestion:
 The ClickHouse worker path never fans back out into per-market parquet files.
 That is the whole point of the migration.
 
-Mirror and preprocess work is interleaved, so the relay starts producing
+Mirror and processing work is interleaved, so the relay starts producing
 queryable filtered hours during the initial backfill instead of waiting for the
 entire raw mirror backlog to finish first.
 

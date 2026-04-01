@@ -1,5 +1,5 @@
 [Unit]
-Description=PMXT relay mirror and precompute worker
+Description=PMXT relay mirror and ClickHouse ingest worker
 After=network-online.target clickhouse-server.service
 Requires=clickhouse-server.service
 Wants=network-online.target

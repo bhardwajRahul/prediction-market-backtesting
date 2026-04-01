@@ -548,6 +548,21 @@ class RelayIndex:
         )
         return cursor.fetchall()
 
+    def list_processing_filenames(self) -> list[str]:
+        cursor = self._conn.execute(
+            """
+            SELECT filename
+            FROM archive_hours
+            WHERE process_status = 'processing'
+            ORDER BY hour
+            """
+        )
+        return [
+            str(row["filename"])
+            for row in cursor.fetchall()
+            if isinstance(row["filename"], str)
+        ]
+
     def mark_processing(self, filename: str) -> None:
         self._run_with_lock_retry(
             lambda: self._write_single_update(
@@ -855,15 +870,6 @@ class RelayIndex:
             FROM archive_hours
             """
         ).fetchone()
-        filtered_hours = self._conn.execute(
-            """
-            SELECT COALESCE(
-                NULLIF(SUM(filtered_artifact_count), 0),
-                (SELECT COUNT(*) FROM filtered_hours)
-            )
-            FROM archive_hours
-            """
-        ).fetchone()[0]
         last_event_at = self._conn.execute(
             "SELECT MAX(created_at) FROM relay_events"
         ).fetchone()[0]
@@ -873,14 +879,11 @@ class RelayIndex:
         payload = {
             "archive_hours": row["archive_hours"],
             "mirrored_hours": row["mirrored_hours"],
-            "sharded_hours": row["sharded_hours"],
             "processed_hours": row["processed_hours"],
             "ready_to_process_hours": row["ready_to_process_hours"],
             "processing_hours": row["processing_hours"],
-            "sharding_hours": row["sharding_hours"],
             "mirror_errors": row["mirror_errors"],
             "process_errors": row["shard_errors"],
-            "filtered_hours": filtered_hours,
             "last_event_at": last_event_at,
             "last_error_at": last_error_at,
         }
@@ -903,7 +906,6 @@ class RelayIndex:
                 SUM(CASE WHEN prebuild_status = 'processing' THEN 1 ELSE 0 END) AS prebuild_processing,
                 SUM(CASE WHEN prebuild_status = 'error' THEN 1 ELSE 0 END) AS prebuild_error,
                 MAX(CASE WHEN mirror_status = 'ready' THEN hour END) AS latest_mirrored_hour,
-                MAX(CASE WHEN process_status = 'ready' THEN hour END) AS latest_sharded_hour,
                 MAX(CASE WHEN prebuild_status = 'ready' THEN hour END) AS latest_processed_hour
             FROM archive_hours
             """

@@ -231,9 +231,7 @@ def test_mark_prebuilt_tracks_filtered_artifact_count(tmp_path: Path):
 
     stats = index.stats()
 
-    assert stats["sharded_hours"] == 1
     assert stats["processed_hours"] == 1
-    assert stats["filtered_hours"] == 42
     assert index.list_hours_needing_filtered_prebuild() == []
 
 
