@@ -9,16 +9,26 @@ this order:
 
 1. local filtered cache
 2. relay-hosted filtered parquet
-3. raw PMXT archive hour on `r2.pmxt.dev`
+3. local raw PMXT archive hour
+4. raw PMXT archive hour on `r2.pmxt.dev`
 
 The current "bring your own data" story is therefore:
 
 - pre-populate the local PMXT filtered cache with PMXT-compatible market-hour
   parquet files
+- or point `PMXT_LOCAL_ARCHIVE_DIR` at a directory of raw PMXT hour files you
+  already mirrored locally
 - or run your own relay and point `PMXT_RELAY_BASE_URL` at it
 
-The loader does not currently expose a first-class runner flag for arbitrary
-vendor raw dumps or for local global raw PMXT hour files.
+If you want local-only PMXT replays, set both:
+
+```bash
+PMXT_RELAY_BASE_URL=0
+PMXT_LOCAL_ARCHIVE_DIR=/path/to/pmxt-hours
+```
+
+The loader still does not expose a first-class runner flag for arbitrary vendor
+raw dumps or automatic normalization from other vendors.
 
 ## Supported Local File Layout
 
@@ -47,9 +57,22 @@ PMXT_CACHE_DIR=0
 PMXT_DISABLE_CACHE=1
 ```
 
+For local raw PMXT archive hours, the loader accepts either of these layouts:
+
+```text
+<raw_root>/polymarket_orderbook_YYYY-MM-DDTHH.parquet
+<raw_root>/YYYY/MM/DD/polymarket_orderbook_YYYY-MM-DDTHH.parquet
+```
+
+Enable that source with:
+
+```bash
+PMXT_LOCAL_ARCHIVE_DIR=/custom/raw-hours
+```
+
 ## Required Parquet Columns
 
-The parquet file must contain exactly the filtered columns the loader already
+Filtered cache parquet must contain exactly the columns the loader already
 consumes:
 
 - `update_type`
@@ -58,6 +81,15 @@ consumes:
 `update_type` should be a string such as `book_snapshot` or `price_change`.
 
 `data` should be a JSON string payload for one Polymarket L2 event.
+
+Local raw PMXT archive parquet must contain:
+
+- `market_id`
+- `update_type`
+- `data`
+
+The loader filters raw hours to `market_id` at parquet scan time, then filters
+the remaining rows to `token_id` inside the JSON payload.
 
 ## Required JSON Payload Shape
 
@@ -120,14 +152,15 @@ PMXT_RELAY_BASE_URL=0
 ## What Is Not Plug-And-Play Yet
 
 - arbitrary third-party vendor raw formats
-- local PMXT global raw hours as a dedicated runner option
 - automatic normalization from another vendor into the PMXT filtered shape
 
 If you have your own global raw dumps today, the safe path is:
 
-1. convert them into the filtered market-hour parquet layout above
-2. stage them into `PMXT_CACHE_DIR`
-3. or ingest them into your own relay that serves the same `/v1/filtered/...`
+1. if they are already PMXT raw archive hours, point `PMXT_LOCAL_ARCHIVE_DIR`
+   at them directly
+2. otherwise convert them into the filtered market-hour parquet layout above
+3. stage them into `PMXT_CACHE_DIR`
+4. or ingest them into your own relay that serves the same `/v1/filtered/...`
    API shape
 
 That keeps the strategy and runner layer unchanged.

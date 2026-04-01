@@ -297,7 +297,8 @@ Or disable relay usage entirely with:
 PMXT_RELAY_BASE_URL=0
 ```
 
-The loader prefers relay-hosted filtered hours before falling back to
+The loader prefers relay-hosted filtered hours before falling back to any local
+raw PMXT mirror configured via `PMXT_LOCAL_ARCHIVE_DIR`, then finally
 `r2.pmxt.dev`.
 
 ## Environment

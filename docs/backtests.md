@@ -78,6 +78,8 @@ bundled in the module so examples stay runnable.
 - `LOOKBACK_DAYS` or explicit start/end vars for data window size
 - `PMXT_RELAY_BASE_URL` to override the default public relay or disable it with
   `PMXT_RELAY_BASE_URL=0`
+- `PMXT_LOCAL_ARCHIVE_DIR` to use your own local PMXT raw hour mirror before
+  falling back to `r2.pmxt.dev`
 - `PMXT_CACHE_DIR` or `PMXT_DISABLE_CACHE` for the local PMXT cache
 - `TRADE_SIZE` and `INITIAL_CASH` for sizing
 - `TARGET_RESULTS` for multi-market runners
@@ -88,6 +90,8 @@ bundled in the module so examples stay runnable.
 - `BACKTEST_ENABLE_TIMING=0` is the explicit quiet opt-out
 - PMXT filtered cache is enabled by default at `~/.cache/nautilus_trader/pmxt`
 - the public relay defaults to `https://209-209-10-83.sslip.io`
+- if you mirror PMXT raw hours locally, set `PMXT_LOCAL_ARCHIVE_DIR=/path/to/raw-hours`
+  and optionally `PMXT_RELAY_BASE_URL=0` for a local-only run
 
 For PMXT data-source behavior and timings, use:
 

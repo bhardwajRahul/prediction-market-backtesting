@@ -6,14 +6,20 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pyarrow as pa
+import pyarrow.parquet as pq
 
 from nautilus_trader.adapters.polymarket import pmxt as pmxt_module
 from nautilus_trader.adapters.polymarket.pmxt import PolymarketPMXTDataLoader
 
 
-def _make_loader(cache_dir: Path | None) -> PolymarketPMXTDataLoader:
+def _make_loader(
+    cache_dir: Path | None,
+    *,
+    local_archive_dir: Path | None = None,
+) -> PolymarketPMXTDataLoader:
     loader = object.__new__(PolymarketPMXTDataLoader)
     loader._pmxt_cache_dir = cache_dir
+    loader._pmxt_local_archive_dir = local_archive_dir
     loader._pmxt_relay_base_url = None
     loader._condition_id = "condition-123"
     loader._token_id = "token-yes-123"
@@ -67,6 +73,28 @@ def test_resolve_relay_base_url_parses_env(monkeypatch):
         "0",
     )
     assert PolymarketPMXTDataLoader._resolve_relay_base_url() is None
+
+
+def test_resolve_local_archive_dir_parses_env(monkeypatch, tmp_path):
+    monkeypatch.delenv(
+        PolymarketPMXTDataLoader._PMXT_LOCAL_ARCHIVE_DIR_ENV,
+        raising=False,
+    )
+    assert PolymarketPMXTDataLoader._resolve_local_archive_dir() is None
+
+    monkeypatch.setenv(
+        PolymarketPMXTDataLoader._PMXT_LOCAL_ARCHIVE_DIR_ENV,
+        str(tmp_path / "pmxt-archive"),
+    )
+    assert PolymarketPMXTDataLoader._resolve_local_archive_dir() == (
+        tmp_path / "pmxt-archive"
+    )
+
+    monkeypatch.setenv(
+        PolymarketPMXTDataLoader._PMXT_LOCAL_ARCHIVE_DIR_ENV,
+        "0",
+    )
+    assert PolymarketPMXTDataLoader._resolve_local_archive_dir() is None
 
 
 def test_resolve_http_tuning_parses_env(monkeypatch):
@@ -212,6 +240,82 @@ def test_load_market_batches_falls_back_to_remote_when_relay_errors(
     assert (
         batches[0].column("data")[0].as_py()
         == '{"token_id":"token-yes-123","payload":"remote"}'
+    )
+
+
+def test_load_market_batches_prefers_local_archive_before_remote(tmp_path):
+    raw_root = tmp_path / "raw-hours"
+    loader = _make_loader(tmp_path / "cache", local_archive_dir=raw_root)
+    hour = pd.Timestamp("2026-03-16T13:00:00Z")
+    raw_path = raw_root / "polymarket_orderbook_2026-03-16T13.parquet"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(
+        pa.table(
+            {
+                "market_id": [
+                    "condition-123",
+                    "condition-123",
+                    "other-condition",
+                ],
+                "update_type": [
+                    "book_snapshot",
+                    "price_change",
+                    "book_snapshot",
+                ],
+                "data": [
+                    '{"token_id":"token-yes-123","payload":"local-book"}',
+                    '{"token_id":"token-yes-123","payload":"local-price"}',
+                    '{"token_id":"token-yes-123","payload":"drop-market"}',
+                ],
+            }
+        ),
+        raw_path,
+    )
+
+    def _fail_remote(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("remote load should not run when local archive exists")
+
+    loader._load_remote_market_batches = _fail_remote  # type: ignore[method-assign]
+
+    batches = loader._load_market_batches(hour, batch_size=1_000)
+
+    assert batches is not None
+    assert [batch.to_pylist() for batch in batches] == [
+        [
+            {
+                "update_type": "book_snapshot",
+                "data": '{"token_id":"token-yes-123","payload":"local-book"}',
+            },
+            {
+                "update_type": "price_change",
+                "data": '{"token_id":"token-yes-123","payload":"local-price"}',
+            },
+        ]
+    ]
+
+
+def test_load_market_batches_reads_nested_local_archive_layout(tmp_path):
+    raw_root = tmp_path / "raw-hours"
+    loader = _make_loader(tmp_path / "cache", local_archive_dir=raw_root)
+    hour = pd.Timestamp("2026-03-17T05:00:00Z")
+    raw_path = raw_root / "2026/03/17/polymarket_orderbook_2026-03-17T05.parquet"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(
+        pa.table(
+            {
+                "market_id": ["condition-123"],
+                "update_type": ["book_snapshot"],
+                "data": ['{"token_id":"token-yes-123","payload":"nested-local"}'],
+            }
+        ),
+        raw_path,
+    )
+
+    batches = loader._load_market_batches(hour, batch_size=1_000)
+
+    assert batches is not None
+    assert batches[0].column("data")[0].as_py() == (
+        '{"token_id":"token-yes-123","payload":"nested-local"}'
     )
 
 

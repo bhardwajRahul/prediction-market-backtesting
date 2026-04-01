@@ -40,7 +40,8 @@ the raw venue data are:
 
 ## PMXT L2 Behavior
 
-- the loader prefers the relay first, then falls back to raw PMXT archive hours
+- the loader prefers local filtered cache first, then relay-hosted filtered
+  hours, then any local raw PMXT mirror, then `r2.pmxt.dev`
 - the relay serves the same two-column parquet shape the loader already reads:
   `update_type` and `data`
 - local PMXT filtered cache is enabled by default and grows with the number of
