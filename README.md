@@ -36,33 +36,32 @@ Relay VPS statistics:
 Backtesting framework for prediction market strategies on
 [Kalshi](https://kalshi.com) and [Polymarket](https://polymarket.com), built on
 top of [NautilusTrader](https://github.com/nautechsystems/nautilus_trader) with
-custom exchange adapters. This repo is still in active development, and the
-public PMXT relay is moving from the old tiny-file path to a raw-hour ->
-ClickHouse path.
-
-Setup, runner, and ops detail now live in `docs/` instead of bloating the root
-README. PMXT timing output is enabled by default, `BACKTEST_ENABLE_TIMING=0` is
-the quiet opt-out, and local PMXT filtered cache is enabled by default at
-`~/.cache/nautilus_trader/pmxt`. The relay CPU badge is loadavg-based, so it
-can hit `100%` during ClickHouse merges or disk wait without meaning the API is
-down. Execution caveats and market-data modeling notes live in
-[`docs/execution-modeling.md`](docs/execution-modeling.md).
+custom exchange adapters. Plotting is inspired by [minitrade](https://github.com/dodid/minitrade). This repo is still in active development, and a full release should happen within the next one to two months..
 
 ![Charting preview](https://raw.githubusercontent.com/evan-kolberg/prediction-market-backtesting/main/docs/assets/charting-preview.jpeg)
 
 ## Table of Contents
 
-- [Docs Index](docs/index.md)
-- [Setup](docs/setup.md)
-- [Backtests And Runners](docs/backtests.md)
-- [Execution Modeling](docs/execution-modeling.md)
-- [PMXT BYOD And Local Data](docs/pmxt-byod.md)
-- [PMXT Fetch Sources And Timing](docs/pmxt-fetch-sources.md)
-- [PMXT Relay](docs/pmxt-relay.md)
-- [Plotting](docs/plotting.md)
-- [Testing](docs/testing.md)
-- [Project Status](docs/project-status.md)
-- [License Notes](docs/license.md)
+- `docs/`
+  - `├──` [index.md](docs/index.md) - Docs Index
+  - `├──` [setup.md](docs/setup.md) - Setup
+  - `├──` [backtests.md](docs/backtests.md) - Backtests And Runners
+  - `├──` [execution-modeling.md](docs/execution-modeling.md) - Execution Modeling
+  - `├──` [pmxt-byod.md](docs/pmxt-byod.md) - PMXT BYOD And Local Data
+  - `├──` [pmxt-fetch-sources.md](docs/pmxt-fetch-sources.md) - PMXT Fetch Sources And Timing
+  - `├──` [pmxt-relay.md](docs/pmxt-relay.md) - PMXT Relay
+  - `├──` [plotting.md](docs/plotting.md) - Plotting
+  - `├──` [testing.md](docs/testing.md) - Testing
+  - `├──` [project-status.md](docs/project-status.md) - Project Status
+  - `└──` [license.md](docs/license.md) - License Notes
 
----
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=evan-kolberg%2Fprediction-market-backtesting&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=evan-kolberg/prediction-market-backtesting&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=evan-kolberg/prediction-market-backtesting&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=evan-kolberg/prediction-market-backtesting&type=date&legend=top-left" />
+ </picture>
+</a>
