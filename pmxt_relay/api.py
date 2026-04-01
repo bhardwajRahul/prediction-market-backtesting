@@ -379,10 +379,17 @@ def _prebuild_file_badge_payload(
     *,
     stats: dict[str, int | str | None],
     progress: PrebuildProgress | None,
+    current_filename: str | None = None,
 ) -> dict[str, object]:
     processing_hours = int(stats.get("processing_hours") or 0)
     if processing_hours <= 0:
         return _badge_payload(label="PMXT file", message="idle", color="lightgrey")
+    if current_filename is not None:
+        return _badge_payload(
+            label="PMXT file",
+            message=current_filename,
+            color="blue",
+        )
     if progress is None:
         return _badge_payload(label="PMXT file", message="starting", color="yellow")
     return _badge_payload(
@@ -396,11 +403,14 @@ def _prebuild_progress_badge_payload(
     *,
     stats: dict[str, int | str | None],
     progress: PrebuildProgress | None,
+    current_filename: str | None = None,
 ) -> dict[str, object]:
     processing_hours = int(stats.get("processing_hours") or 0)
     if processing_hours <= 0:
         return _badge_payload(label="PMXT rows", message="idle", color="lightgrey")
     if progress is None:
+        return _badge_payload(label="PMXT rows", message="starting", color="yellow")
+    if current_filename is not None and progress.filename != current_filename:
         return _badge_payload(label="PMXT rows", message="starting", color="yellow")
     return _badge_payload(
         label="PMXT rows",
@@ -699,6 +709,7 @@ async def badge_prebuild_file(request: web.Request) -> web.Response:
         _prebuild_file_badge_payload(
             stats=stats,
             progress=index.latest_prebuild_progress(),
+            current_filename=index.current_processing_filename(),
         )
     )
 
@@ -710,6 +721,7 @@ async def badge_prebuild_progress(request: web.Request) -> web.Response:
         _prebuild_progress_badge_payload(
             stats=stats,
             progress=index.latest_prebuild_progress(),
+            current_filename=index.current_processing_filename(),
         )
     )
 
@@ -785,6 +797,7 @@ async def badge_prebuild_file_svg(request: web.Request) -> web.Response:
         _prebuild_file_badge_payload(
             stats=stats,
             progress=index.latest_prebuild_progress(),
+            current_filename=index.current_processing_filename(),
         )
     )
 
@@ -796,6 +809,7 @@ async def badge_prebuild_progress_svg(request: web.Request) -> web.Response:
         _prebuild_progress_badge_payload(
             stats=stats,
             progress=index.latest_prebuild_progress(),
+            current_filename=index.current_processing_filename(),
         )
     )
 

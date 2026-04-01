@@ -339,6 +339,27 @@ def test_latest_prebuild_progress_accepts_process_progress_events(tmp_path: Path
     assert progress.total_rows == 4096
 
 
+def test_current_processing_filename_returns_active_hour(tmp_path: Path):
+    index = RelayIndex(tmp_path / "relay.sqlite3")
+    index.initialize()
+    filename = "polymarket_orderbook_2026-03-21T14.parquet"
+    index.upsert_discovered_hour(
+        filename,
+        f"https://r2.pmxt.dev/{filename}",
+        1,
+    )
+    index.mark_mirrored(
+        filename,
+        local_path="/tmp/raw.parquet",
+        etag=None,
+        content_length=None,
+        last_modified=None,
+    )
+    index.mark_processing(filename)
+
+    assert index.current_processing_filename() == filename
+
+
 def test_lock_retry_retries_until_success(tmp_path: Path, monkeypatch) -> None:
     index = RelayIndex(tmp_path / "relay.sqlite3")
     attempts = 0

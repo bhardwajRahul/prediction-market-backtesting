@@ -844,6 +844,21 @@ class RelayIndex:
         ).fetchone()
         return dict(row)
 
+    def current_processing_filename(self) -> str | None:
+        row = self._conn.execute(
+            """
+            SELECT filename
+            FROM archive_hours
+            WHERE process_status = 'processing' OR prebuild_status = 'processing'
+            ORDER BY hour
+            LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        filename = row["filename"]
+        return filename if isinstance(filename, str) else None
+
     def log_event(
         self,
         *,
