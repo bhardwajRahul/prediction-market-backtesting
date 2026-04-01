@@ -42,18 +42,50 @@ custom exchange adapters. Plotting is inspired by [minitrade](https://github.com
 
 ## Table of Contents
 
-- `docs/`
-  - `├──` [index.md](docs/index.md) - Docs Index
-  - `├──` [setup.md](docs/setup.md) - Setup
-  - `├──` [backtests.md](docs/backtests.md) - Backtests And Runners
-  - `├──` [execution-modeling.md](docs/execution-modeling.md) - Execution Modeling
-  - `├──` [pmxt-byod.md](docs/pmxt-byod.md) - PMXT BYOD And Local Data
-  - `├──` [pmxt-fetch-sources.md](docs/pmxt-fetch-sources.md) - PMXT Fetch Sources And Timing
-  - `├──` [pmxt-relay.md](docs/pmxt-relay.md) - PMXT Relay
-  - `├──` [plotting.md](docs/plotting.md) - Plotting
-  - `├──` [testing.md](docs/testing.md) - Testing
-  - `├──` [project-status.md](docs/project-status.md) - Project Status
-  - `└──` [license.md](docs/license.md) - License Notes
+- [Docs Index](docs/index.md)
+- [Setup](docs/setup.md)
+  - [Prerequisites](docs/setup.md#prerequisites)
+  - [Install](docs/setup.md#install)
+  - [First Run](docs/setup.md#first-run)
+  - [PMXT Defaults](docs/setup.md#pmxt-defaults)
+  - [Updating The Vendored Subtree](docs/setup.md#updating-the-vendored-subtree)
+- [Backtests And Runners](docs/backtests.md)
+  - [Repo Layout](docs/backtests.md#repo-layout)
+  - [Runner Contract](docs/backtests.md#runner-contract)
+  - [Running Backtests](docs/backtests.md#running-backtests)
+  - [Common Environment Variables](docs/backtests.md#common-environment-variables)
+  - [PMXT Notes](docs/backtests.md#pmxt-notes)
+- [Execution Modeling](docs/execution-modeling.md)
+  - [Fees](docs/execution-modeling.md#fees)
+  - [Slippage](docs/execution-modeling.md#slippage)
+  - [Limits](docs/execution-modeling.md#limits)
+  - [PMXT L2 Behavior](docs/execution-modeling.md#pmxt-l2-behavior)
+- [PMXT BYOD And Local Data](docs/pmxt-byod.md)
+  - [What Works Today](docs/pmxt-byod.md#what-works-today)
+  - [Supported Local File Layout](docs/pmxt-byod.md#supported-local-file-layout)
+  - [Required Parquet Columns](docs/pmxt-byod.md#required-parquet-columns)
+  - [Required JSON Payload Shape](docs/pmxt-byod.md#required-json-payload-shape)
+  - [Relay Mode](docs/pmxt-byod.md#relay-mode)
+  - [What Is Not Plug-And-Play Yet](docs/pmxt-byod.md#what-is-not-plug-and-play-yet)
+- [PMXT Fetch Sources And Timing](docs/pmxt-fetch-sources.md)
+  - [Example Output](docs/pmxt-fetch-sources.md#example-output)
+  - [Timing Expectations By Source](docs/pmxt-fetch-sources.md#timing-expectations-by-source)
+  - [How To See This Output](docs/pmxt-fetch-sources.md#how-to-see-this-output)
+- [PMXT Relay](docs/pmxt-relay.md)
+- [Plotting](docs/plotting.md)
+  - [Output Paths](docs/plotting.md#output-paths)
+  - [Multi-Market References](docs/plotting.md#multi-market-references)
+- [Testing](docs/testing.md)
+  - [Standard Repo Gate](docs/testing.md#standard-repo-gate)
+  - [Useful Smoke Checks](docs/testing.md#useful-smoke-checks)
+- [Project Status](docs/project-status.md)
+  - [Roadmap](docs/project-status.md#roadmap)
+  - [Known Issues](docs/project-status.md#known-issues)
+  - [Recently Fixed](docs/project-status.md#recently-fixed)
+- [License Notes](docs/license.md)
+  - [Scope](docs/license.md#scope)
+  - [NautilusTrader Attribution](docs/license.md#nautilustrader-attribution)
+  - [Practical Meaning](docs/license.md#practical-meaning)
 
 
 ## Star History
