@@ -6,6 +6,7 @@ from datetime import UTC
 from datetime import datetime
 import os
 from pathlib import Path
+import threading
 from unittest.mock import patch
 
 import pyarrow as pa
@@ -14,6 +15,7 @@ from aiohttp.test_utils import TestClient
 from aiohttp.test_utils import TestServer
 
 from pmxt_relay.api import (
+    FILTERED_STORE_APP_KEY,
     INDEX_APP_KEY,
     RequestRateLimiter,
     _client_id,
@@ -910,5 +912,67 @@ def test_list_filtered_hours_scans_filesystem_when_index_is_empty(tmp_path: Path
                 "url": f"/v1/filtered/{condition_id}/{token_id}/polymarket_orderbook_2026-03-21T12.parquet",
             }
         ]
+
+    asyncio.run(scenario())
+
+
+def test_list_filtered_hours_moves_store_query_off_event_loop(tmp_path: Path):
+    async def scenario() -> None:
+        config = _make_config(tmp_path)
+        config.ensure_directories()
+        condition_id = "0x" + ("ab" * 32)
+        token_id = "123456789"
+        main_thread_id = threading.get_ident()
+        observed_thread_ids: list[int] = []
+
+        class _StubStore:
+            def list_hours(
+                self,
+                condition_id: str,
+                token_id: str,
+                *,
+                start_hour: str | None = None,
+                end_hour: str | None = None,
+            ):
+                observed_thread_ids.append(threading.get_ident())
+                return []
+
+            def resolve_hour_path(
+                self,
+                condition_id: str,
+                token_id: str,
+                filename: str,
+            ):
+                return None
+
+            async def serve_hour(
+                self,
+                request,
+                *,
+                condition_id: str,
+                token_id: str,
+                filename: str,
+            ):
+                return None
+
+        app = create_app(config)
+        app[FILTERED_STORE_APP_KEY] = _StubStore()
+
+        server = TestServer(app)
+        client = TestClient(server)
+        await client.start_server()
+        try:
+            response = await client.get(
+                f"/v1/markets/{condition_id}/tokens/{token_id}/hours"
+            )
+            assert response.status == 200
+            payload = await response.json()
+        finally:
+            await client.close()
+
+        assert payload["hours"] == []
+        assert observed_thread_ids
+        assert observed_thread_ids == [observed_thread_ids[0]]
+        assert observed_thread_ids[0] != main_thread_id
 
     asyncio.run(scenario())

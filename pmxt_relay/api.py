@@ -862,6 +862,23 @@ async def _index_progress_snapshot_async(
     return await asyncio.to_thread(_snapshot)
 
 
+async def _filtered_store_list_hours_async(
+    filtered_store: FilteredHourStore,
+    condition_id: str,
+    token_id: str,
+    *,
+    start_hour: str | None = None,
+    end_hour: str | None = None,
+):
+    return await asyncio.to_thread(
+        filtered_store.list_hours,
+        condition_id,
+        token_id,
+        start_hour=start_hour,
+        end_hour=end_hour,
+    )
+
+
 async def stats(request: web.Request) -> web.Response:
     index = request.app[INDEX_APP_KEY]
     return web.json_response(await _index_stats_async(index))
@@ -1158,7 +1175,8 @@ async def list_filtered_hours(request: web.Request) -> web.Response:
         raise web.HTTPNotFound(text="filtered hours not found")
     start_hour = _iso_hour_query(request.query.get("start"))
     end_hour = _iso_hour_query(request.query.get("end"))
-    rows = filtered_store.list_hours(
+    rows = await _filtered_store_list_hours_async(
+        filtered_store,
         condition_id,
         token_id,
         start_hour=start_hour,
