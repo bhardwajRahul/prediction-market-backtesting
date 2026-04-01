@@ -56,7 +56,6 @@ _SYSTEM_METRICS_SAMPLE_SECS = 0.2
 _SYSTEM_SERVICE_SPECS = {
     "api": ("pmxt-relay-api.service", "Relay API"),
     "worker": ("pmxt-relay-worker.service", "Relay worker"),
-    "prebuild": ("pmxt-relay-prebuild.service", "Prebuild"),
     "clickhouse": ("clickhouse-server.service", "ClickHouse"),
 }
 _SYSTEM_METRICS_CACHE_LOCK = threading.Lock()
@@ -335,6 +334,39 @@ def _service_badge_payload(
         label=label,
         message=active_state,
         color="lightgrey",
+    )
+
+
+def _stage_badge_payload(
+    *,
+    label: str,
+    active_count: int,
+    queued_count: int,
+    error_count: int,
+) -> dict[str, object]:
+    if active_count > 0:
+        return _badge_payload(
+            label=label,
+            message=f"active {active_count}",
+            color="brightgreen",
+        )
+    if queued_count > 0:
+        color = "orange" if queued_count >= 100 else "yellow"
+        return _badge_payload(
+            label=label,
+            message=f"queued {queued_count}",
+            color=color,
+        )
+    if error_count > 0:
+        return _badge_payload(
+            label=label,
+            message=f"error {error_count}",
+            color="red",
+        )
+    return _badge_payload(
+        label=label,
+        message="caught up",
+        color="green",
     )
 
 
@@ -977,11 +1009,31 @@ async def badge_worker_svg(request: web.Request) -> web.Response:
     )
 
 
-async def badge_prebuild_svg(request: web.Request) -> web.Response:
-    config = request.app[CONFIG_APP_KEY]
-    metrics = await asyncio.to_thread(_system_metrics_snapshot, config)
+async def badge_mirroring_svg(request: web.Request) -> web.Response:
+    index = request.app[INDEX_APP_KEY]
+    queue = index.queue_summary()
     return _badge_svg_response(
-        _service_badge_payload(_service_metrics_for_badge(metrics, "prebuild"))
+        _stage_badge_payload(
+            label="Mirroring",
+            active_count=int(queue.get("mirror_processing") or 0),
+            queued_count=int(queue.get("mirror_pending") or 0),
+            error_count=int(queue.get("mirror_error") or 0),
+        )
+    )
+
+
+async def badge_processing_svg(request: web.Request) -> web.Response:
+    index = request.app[INDEX_APP_KEY]
+    queue = index.queue_summary()
+    return _badge_svg_response(
+        _stage_badge_payload(
+            label="Processing",
+            active_count=int(queue.get("process_processing") or 0),
+            queued_count=int(
+                (queue.get("process_ready") or 0) + (queue.get("process_pending") or 0)
+            ),
+            error_count=int(queue.get("process_error") or 0),
+        )
     )
 
 
@@ -1184,7 +1236,8 @@ def create_app(config: RelayConfig) -> web.Application:
     app.router.add_get("/v1/badge/iowait.svg", badge_iowait_svg)
     app.router.add_get("/v1/badge/api.svg", badge_api_svg)
     app.router.add_get("/v1/badge/worker.svg", badge_worker_svg)
-    app.router.add_get("/v1/badge/prebuild.svg", badge_prebuild_svg)
+    app.router.add_get("/v1/badge/mirroring.svg", badge_mirroring_svg)
+    app.router.add_get("/v1/badge/processing.svg", badge_processing_svg)
     app.router.add_get("/v1/badge/clickhouse.svg", badge_clickhouse_svg)
     app.router.add_get(
         "/v1/markets/{condition_id}/tokens/{token_id}/hours",

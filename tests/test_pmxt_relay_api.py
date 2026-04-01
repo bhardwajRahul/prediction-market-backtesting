@@ -617,14 +617,6 @@ def test_system_endpoints_return_live_metrics_and_svg(tmp_path: Path):
                             "pid": 222,
                             "cpu_percent": 18.0,
                         },
-                        "prebuild": {
-                            "service_name": "pmxt-relay-prebuild.service",
-                            "label": "Prebuild",
-                            "active_state": "inactive",
-                            "sub_state": "dead",
-                            "pid": 0,
-                            "cpu_percent": 0.0,
-                        },
                         "clickhouse": {
                             "service_name": "clickhouse-server.service",
                             "label": "ClickHouse",
@@ -647,7 +639,6 @@ def test_system_endpoints_return_live_metrics_and_svg(tmp_path: Path):
                 iowait_badge = await client.get("/v1/badge/iowait.svg")
                 api_badge = await client.get("/v1/badge/api.svg")
                 worker_badge = await client.get("/v1/badge/worker.svg")
-                prebuild_badge = await client.get("/v1/badge/prebuild.svg")
                 clickhouse_badge = await client.get("/v1/badge/clickhouse.svg")
                 assert cpu_badge.status == 200
                 assert load_badge.status == 200
@@ -656,7 +647,6 @@ def test_system_endpoints_return_live_metrics_and_svg(tmp_path: Path):
                 assert iowait_badge.status == 200
                 assert api_badge.status == 200
                 assert worker_badge.status == 200
-                assert prebuild_badge.status == 200
                 assert clickhouse_badge.status == 200
                 cpu_svg = await cpu_badge.text()
                 load_svg = await load_badge.text()
@@ -665,7 +655,6 @@ def test_system_endpoints_return_live_metrics_and_svg(tmp_path: Path):
                 iowait_svg = await iowait_badge.text()
                 api_svg = await api_badge.text()
                 worker_svg = await worker_badge.text()
-                prebuild_svg = await prebuild_badge.text()
                 clickhouse_svg = await clickhouse_badge.text()
         finally:
             await client.close()
@@ -692,14 +681,6 @@ def test_system_endpoints_return_live_metrics_and_svg(tmp_path: Path):
                     "pid": 222,
                     "cpu_percent": 18.0,
                 },
-                "prebuild": {
-                    "service_name": "pmxt-relay-prebuild.service",
-                    "label": "Prebuild",
-                    "active_state": "inactive",
-                    "sub_state": "dead",
-                    "pid": 0,
-                    "cpu_percent": 0.0,
-                },
                 "clickhouse": {
                     "service_name": "clickhouse-server.service",
                     "label": "ClickHouse",
@@ -717,8 +698,56 @@ def test_system_endpoints_return_live_metrics_and_svg(tmp_path: Path):
         assert "I/O wait" in iowait_svg and "7.5%" in iowait_svg
         assert "Relay API" in api_svg and "running 1.5%" in api_svg
         assert "Relay worker" in worker_svg and "running 18.0%" in worker_svg
-        assert "Prebuild" in prebuild_svg and "inactive" in prebuild_svg
         assert "ClickHouse" in clickhouse_svg and "running 62.5%" in clickhouse_svg
+
+    asyncio.run(scenario())
+
+
+def test_stage_badges_show_live_mirror_and_process_activity(tmp_path: Path):
+    async def scenario() -> None:
+        config = _make_config(tmp_path)
+        config.ensure_directories()
+        mirroring_filename = "polymarket_orderbook_2026-03-21T12.parquet"
+        processing_filename = "polymarket_orderbook_2026-03-21T13.parquet"
+
+        app = create_app(config)
+        index = app[INDEX_APP_KEY]
+        index.upsert_discovered_hour(
+            mirroring_filename,
+            f"https://r2.pmxt.dev/{mirroring_filename}",
+            1,
+        )
+        index.mark_mirroring(mirroring_filename)
+
+        index.upsert_discovered_hour(
+            processing_filename,
+            f"https://r2.pmxt.dev/{processing_filename}",
+            1,
+        )
+        index.mark_mirrored(
+            processing_filename,
+            local_path="/tmp/raw-processing.parquet",
+            etag=None,
+            content_length=None,
+            last_modified=None,
+        )
+        index.mark_processing(processing_filename)
+
+        server = TestServer(app)
+        client = TestClient(server)
+        await client.start_server()
+        try:
+            mirroring_badge = await client.get("/v1/badge/mirroring.svg")
+            processing_badge = await client.get("/v1/badge/processing.svg")
+            assert mirroring_badge.status == 200
+            assert processing_badge.status == 200
+            mirroring_svg = await mirroring_badge.text()
+            processing_svg = await processing_badge.text()
+        finally:
+            await client.close()
+
+        assert "Mirroring" in mirroring_svg and "active 1" in mirroring_svg
+        assert "Processing" in processing_svg and "active 1" in processing_svg
 
     asyncio.run(scenario())
 

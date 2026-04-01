@@ -27,7 +27,8 @@ Relay VPS statistics:
 
 [![Relay API](https://209-209-10-83.sslip.io/v1/badge/api.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![Relay worker](https://209-209-10-83.sslip.io/v1/badge/worker.svg)](https://209-209-10-83.sslip.io/v1/system)
-[![Prebuild](https://209-209-10-83.sslip.io/v1/badge/prebuild.svg)](https://209-209-10-83.sslip.io/v1/system)
+[![Mirroring](https://209-209-10-83.sslip.io/v1/badge/mirroring.svg)](https://209-209-10-83.sslip.io/v1/queue)
+[![Processing](https://209-209-10-83.sslip.io/v1/badge/processing.svg)](https://209-209-10-83.sslip.io/v1/queue)
 [![ClickHouse](https://209-209-10-83.sslip.io/v1/badge/clickhouse.svg)](https://209-209-10-83.sslip.io/v1/system)
 
 [![PMXT mirrored](https://209-209-10-83.sslip.io/v1/badge/mirrored.svg)](https://209-209-10-83.sslip.io/v1/stats)
@@ -42,7 +43,7 @@ Relay VPS statistics:
 Backtesting framework for prediction market strategies on
 [Kalshi](https://kalshi.com) and [Polymarket](https://polymarket.com), built on
 top of [NautilusTrader](https://github.com/nautechsystems/nautilus_trader) with
-custom exchange adapters. Plotting inspired by [minitrade](https://github.com/dodid/minitrade). This repo is still in active development, and a full release should happen within the next one to two months.
+custom exchange adapters. Plotting inspired by [minitrade](https://github.com/dodid/minitrade). This repo is still in active development, and **a full release should happen within the next one to two months.**
 
 Fantastic single & multi-market charting. Featuring: equity (total & individual markets), profit / loss ticks, P&L periodic bars, market allocation, YES price (with green buy and red sell fills), drawdown, sharpe (with above/below shading), cash / equity, monthly returns, and cumulative brier advantage.
 ![Charting preview](https://raw.githubusercontent.com/evan-kolberg/prediction-market-backtesting/main/docs/assets/charting-preview.jpeg)
