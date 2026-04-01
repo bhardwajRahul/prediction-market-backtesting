@@ -352,6 +352,8 @@ Key env vars that still matter:
   insert batch (lower it if large hours trigger ClickHouse OOMs while parsing
   Parquet inserts)
 
+The current conservative default is `2048`.
+
 The systemd units in `systemd/` include `MemoryMax` to prevent OOM kills from
 crashing the whole machine. If a service hits its limit, systemd kills just
 that service and `Restart=always` brings it back.

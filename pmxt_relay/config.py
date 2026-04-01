@@ -56,7 +56,7 @@ class RelayConfig:
     clickhouse_user: str | None = None
     clickhouse_password: str | None = None
     clickhouse_timeout_secs: int = 60
-    clickhouse_insert_batch_rows: int = 16384
+    clickhouse_insert_batch_rows: int = 2048
     trusted_proxy_ips: tuple[str, ...] = ("127.0.0.1", "::1")
     filtered_materialization_workers: int = 4
 
@@ -128,7 +128,7 @@ class RelayConfig:
             ),
             clickhouse_insert_batch_rows=max(
                 1024,
-                _env_int("PMXT_RELAY_CLICKHOUSE_INSERT_BATCH_ROWS", 16384),
+                _env_int("PMXT_RELAY_CLICKHOUSE_INSERT_BATCH_ROWS", 2048),
             ),
             trusted_proxy_ips=_env_csv(
                 "PMXT_RELAY_TRUSTED_PROXY_IPS",
