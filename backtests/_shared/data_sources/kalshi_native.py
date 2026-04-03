@@ -8,7 +8,6 @@ from typing import Any, Iterator, Sequence
 import msgspec
 
 from nautilus_trader.adapters.kalshi.loaders import KalshiDataLoader
-from nautilus_trader.adapters.kalshi.providers import KALSHI_REST_BASE
 from nautilus_trader.adapters.kalshi.providers import market_dict_to_instrument
 
 from backtests._shared.data_sources._common import env_value
@@ -19,6 +18,7 @@ from backtests._shared.data_sources._common import trim_url_suffix
 
 
 KALSHI_REST_BASE_URL_ENV = "KALSHI_REST_BASE_URL"
+_KALSHI_REST_SUFFIXES = ("/markets/trades", "/markets", "/events", "/series")
 
 
 @dataclass(frozen=True)
@@ -31,11 +31,11 @@ class RunnerKalshiDataLoader(KalshiDataLoader):
     def _configured_rest_base_url(cls) -> str:
         value = env_value(os.getenv(KALSHI_REST_BASE_URL_ENV))
         if value is None or is_disabled(value):
-            return KALSHI_REST_BASE
-        return trim_url_suffix(
-            value,
-            ("/markets/trades", "/markets", "/events", "/series"),
-        )
+            raise ValueError(
+                "Kalshi native data source requires an explicit REST base URL via "
+                "DATA.sources or KALSHI_REST_BASE_URL."
+            )
+        return trim_url_suffix(value, _KALSHI_REST_SUFFIXES)
 
     @classmethod
     async def from_market_ticker(
@@ -151,8 +151,11 @@ class RunnerKalshiDataLoader(KalshiDataLoader):
 
 
 def _summary_from_rest_base_url(rest_base_url: str | None) -> str:
-    if rest_base_url is None or rest_base_url == KALSHI_REST_BASE:
-        return "Kalshi source: native public endpoint"
+    if rest_base_url is None:
+        raise ValueError(
+            "Kalshi native data source requires an explicit REST base URL via "
+            "DATA.sources or KALSHI_REST_BASE_URL."
+        )
     return f"Kalshi source: native (rest={rest_base_url})"
 
 
@@ -172,10 +175,7 @@ def _resolve_explicit_sources(
             raise ValueError(
                 "Kalshi explicit sources supports at most one REST base URL."
             )
-        rest_base_url = trim_url_suffix(
-            normalized,
-            ("/markets/trades", "/markets", "/events", "/series"),
-        )
+        rest_base_url = trim_url_suffix(normalized, _KALSHI_REST_SUFFIXES)
 
     return (
         KalshiNativeDataSourceSelection(
@@ -197,10 +197,7 @@ def resolve_kalshi_native_data_source_selection(
 
     rest_base_url = env_value(os.getenv(KALSHI_REST_BASE_URL_ENV))
     if rest_base_url is not None and not is_disabled(rest_base_url):
-        rest_base_url = trim_url_suffix(
-            rest_base_url,
-            ("/markets/trades", "/markets", "/events", "/series"),
-        )
+        rest_base_url = trim_url_suffix(rest_base_url, _KALSHI_REST_SUFFIXES)
     else:
         rest_base_url = None
 

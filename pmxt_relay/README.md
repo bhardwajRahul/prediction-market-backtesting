@@ -34,16 +34,6 @@ uv run python scripts/pmxt_process_local.py \
   --filtered-root ~/.cache/nautilus_trader/pmxt
 ```
 
-## Default Mode
-
-Fresh installs default to mirror-only behavior:
-
-```bash
-PMXT_RELAY_MIRROR_ONLY=1
-```
-
-That keeps discovery, mirroring, `/v1/raw/*`, and the operational endpoints online.
-
 ## Directory Layout
 
 Default relay-owned state:
@@ -93,6 +83,10 @@ If you front the relay with Caddy, nginx, or another reverse proxy, serve
 `/v1/raw/*` directly from `/srv/pmxt-relay/raw` when possible instead of
 proxying large parquet downloads through Python.
 
+Edit `/etc/pmxt-relay.env` before starting the services. The active relay does
+not bake in archive or raw-origin URLs; set your mirror's upstream listing URL,
+raw origin URL, and public base URL explicitly for the environment you run.
+
 ## API Surface
 
 Active mirror-focused endpoints:
@@ -112,4 +106,5 @@ Filtered-hour HTTP endpoints are intentionally not part of the active relay path
 
 Use `archive/pmxt_relay_legacy/` if you need to inspect or revive the older
 server-side processing stack. That archive preserves the old relay-oriented
-ClickHouse and filtered-serving code instead of deleting it from the repo.
+ClickHouse and filtered-serving code for teams that want to run that older
+architecture on their own infrastructure.

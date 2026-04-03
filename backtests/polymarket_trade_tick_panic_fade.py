@@ -23,65 +23,63 @@ from backtests._shared._prediction_market_backtest import PredictionMarketBackte
 from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
 from backtests._shared._timing_harness import timing_harness
-from backtests._shared.data_sources import NATIVE_VENDOR
+from backtests._shared.data_sources import Native, Polymarket, TradeTick
 
 
 NAME = "polymarket_trade_tick_panic_fade"
+
 DESCRIPTION = "Panic selloff fade strategy on a single Polymarket market"
-PLATFORM = "polymarket"
-DATA_TYPE = "trade_tick"
-VENDOR = NATIVE_VENDOR.name
 
-MARKET_SLUG = "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
-LOOKBACK_DAYS = 30
-MIN_TRADES = 300
-MIN_PRICE_RANGE = 0.005
-
-DROP_WINDOW = 30
-MIN_DROP = 0.002
-PANIC_PRICE = 0.249
-REBOUND_EXIT = 0.251
-MAX_HOLDING_PERIODS = 80
-TAKE_PROFIT = 0.004
-STOP_LOSS = 0.004
-
-TRADE_SIZE = Decimal("100")
-INITIAL_CASH = 100.0
 DATA = MarketDataConfig(
-    platform=PLATFORM,
-    data_type=DATA_TYPE,
-    vendor=NATIVE_VENDOR,
-    sources=(),
+    platform=Polymarket,
+    data_type=TradeTick,
+    vendor=Native,
+    sources=(
+        "gamma=https://gamma-api.polymarket.com",
+        "trades=https://data-api.polymarket.com",
+        "clob=https://clob.polymarket.com",
+    ),
 )
+
+SIMS = (
+    MarketSimConfig(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        lookback_days=30,
+    ),
+)
+
 STRATEGY_CONFIGS = [
     {
         "strategy_path": "strategies:TradeTickPanicFadeStrategy",
         "config_path": "strategies:TradeTickPanicFadeConfig",
         "config": {
-            "trade_size": TRADE_SIZE,
-            "drop_window": DROP_WINDOW,
-            "min_drop": MIN_DROP,
-            "panic_price": PANIC_PRICE,
-            "rebound_exit": REBOUND_EXIT,
-            "max_holding_periods": MAX_HOLDING_PERIODS,
-            "take_profit": TAKE_PROFIT,
-            "stop_loss": STOP_LOSS,
+            "trade_size": Decimal("100"),
+            "drop_window": 30,
+            "min_drop": 0.002,
+            "panic_price": 0.249,
+            "rebound_exit": 0.251,
+            "max_holding_periods": 80,
+            "take_profit": 0.004,
+            "stop_loss": 0.004,
         },
     },
 ]
-SIMS = (MarketSimConfig(market_slug=MARKET_SLUG, lookback_days=LOOKBACK_DAYS),)
+
 REPORT = MarketReportConfig(
-    count_key="trades", count_label="Trades", pnl_label="PnL (USDC)"
+    count_key="trades",
+    count_label="Trades",
+    pnl_label="PnL (USDC)",
 )
+
 BACKTEST = PredictionMarketBacktest(
     name=NAME,
     data=DATA,
     sims=SIMS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=INITIAL_CASH,
-    probability_window=DROP_WINDOW,
-    min_trades=MIN_TRADES,
-    min_price_range=MIN_PRICE_RANGE,
+    initial_cash=100.0,
+    probability_window=30,
+    min_trades=300,
+    min_price_range=0.005,
 )
 
 

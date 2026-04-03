@@ -23,63 +23,62 @@ from backtests._shared._prediction_market_backtest import PredictionMarketBackte
 from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
 from backtests._shared._timing_harness import timing_harness
-from backtests._shared.data_sources import NATIVE_VENDOR
+from backtests._shared.data_sources import Native, Polymarket, TradeTick
 
 
 NAME = "polymarket_trade_tick_vwap_reversion"
+
 DESCRIPTION = "VWAP dislocation mean-reversion on a single Polymarket market"
-PLATFORM = "polymarket"
-DATA_TYPE = "trade_tick"
-VENDOR = NATIVE_VENDOR.name
 
-MARKET_SLUG = "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
-LOOKBACK_DAYS = 30
-MIN_TRADES = 300
-MIN_PRICE_RANGE = 0.005
-
-VWAP_WINDOW = 30
-ENTRY_THRESHOLD = 0.0015
-EXIT_THRESHOLD = 0.0003
-MIN_TICK_SIZE = 0.0
-TAKE_PROFIT = 0.004
-STOP_LOSS = 0.004
-
-TRADE_SIZE = Decimal("100")
-INITIAL_CASH = 100.0
 DATA = MarketDataConfig(
-    platform=PLATFORM,
-    data_type=DATA_TYPE,
-    vendor=NATIVE_VENDOR,
-    sources=(),
+    platform=Polymarket,
+    data_type=TradeTick,
+    vendor=Native,
+    sources=(
+        "gamma=https://gamma-api.polymarket.com",
+        "trades=https://data-api.polymarket.com",
+        "clob=https://clob.polymarket.com",
+    ),
 )
+
+SIMS = (
+    MarketSimConfig(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        lookback_days=30,
+    ),
+)
+
 STRATEGY_CONFIGS = [
     {
         "strategy_path": "strategies:TradeTickVWAPReversionStrategy",
         "config_path": "strategies:TradeTickVWAPReversionConfig",
         "config": {
-            "trade_size": TRADE_SIZE,
-            "vwap_window": VWAP_WINDOW,
-            "entry_threshold": ENTRY_THRESHOLD,
-            "exit_threshold": EXIT_THRESHOLD,
-            "min_tick_size": MIN_TICK_SIZE,
-            "take_profit": TAKE_PROFIT,
-            "stop_loss": STOP_LOSS,
+            "trade_size": Decimal("100"),
+            "vwap_window": 30,
+            "entry_threshold": 0.0015,
+            "exit_threshold": 0.0003,
+            "min_tick_size": 0.0,
+            "take_profit": 0.004,
+            "stop_loss": 0.004,
         },
     },
 ]
-SIMS = (MarketSimConfig(market_slug=MARKET_SLUG, lookback_days=LOOKBACK_DAYS),)
+
 REPORT = MarketReportConfig(
-    count_key="trades", count_label="Trades", pnl_label="PnL (USDC)"
+    count_key="trades",
+    count_label="Trades",
+    pnl_label="PnL (USDC)",
 )
+
 BACKTEST = PredictionMarketBacktest(
     name=NAME,
     data=DATA,
     sims=SIMS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=INITIAL_CASH,
-    probability_window=VWAP_WINDOW,
-    min_trades=MIN_TRADES,
-    min_price_range=MIN_PRICE_RANGE,
+    initial_cash=100.0,
+    probability_window=30,
+    min_trades=300,
+    min_price_range=0.005,
 )
 
 

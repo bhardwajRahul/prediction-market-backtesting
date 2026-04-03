@@ -970,7 +970,14 @@ class RelayIndex:
                 SUM(CASE WHEN prebuild_status = 'processing' THEN 1 ELSE 0 END) AS prebuild_processing,
                 SUM(CASE WHEN prebuild_status = 'error' THEN 1 ELSE 0 END) AS prebuild_error,
                 MAX(CASE WHEN mirror_status = 'ready' THEN hour END) AS latest_mirrored_hour,
-                MAX(CASE WHEN prebuild_status = 'ready' THEN hour END) AS latest_processed_hour
+                MAX(CASE WHEN prebuild_status = 'ready' THEN hour END) AS latest_processed_hour,
+                (
+                    SELECT filename
+                    FROM archive_hours latest_ready
+                    WHERE latest_ready.mirror_status = 'ready'
+                    ORDER BY latest_ready.hour DESC, latest_ready.mirrored_at DESC, latest_ready.filename DESC
+                    LIMIT 1
+                ) AS latest_mirrored_filename
             FROM archive_hours
             """
         )

@@ -23,61 +23,61 @@ from backtests._shared._prediction_market_backtest import PredictionMarketBackte
 from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
 from backtests._shared._timing_harness import timing_harness
-from backtests._shared.data_sources import NATIVE_VENDOR
+from backtests._shared.data_sources import Native, Polymarket, TradeTick
 
 
 NAME = "polymarket_trade_tick_rsi_reversion"
+
 DESCRIPTION = "RSI pullback mean-reversion on a single Polymarket market"
-PLATFORM = "polymarket"
-DATA_TYPE = "trade_tick"
-VENDOR = NATIVE_VENDOR.name
 
-MARKET_SLUG = "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
-LOOKBACK_DAYS = 30
-MIN_TRADES = 300
-MIN_PRICE_RANGE = 0.005
-
-RSI_PERIOD = 20
-ENTRY_RSI = 45.0
-EXIT_RSI = 53.0
-TAKE_PROFIT = 0.004
-STOP_LOSS = 0.004
-
-TRADE_SIZE = Decimal("100")
-INITIAL_CASH = 100.0
 DATA = MarketDataConfig(
-    platform=PLATFORM,
-    data_type=DATA_TYPE,
-    vendor=NATIVE_VENDOR,
-    sources=(),
+    platform=Polymarket,
+    data_type=TradeTick,
+    vendor=Native,
+    sources=(
+        "gamma=https://gamma-api.polymarket.com",
+        "trades=https://data-api.polymarket.com",
+        "clob=https://clob.polymarket.com",
+    ),
 )
+
+SIMS = (
+    MarketSimConfig(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        lookback_days=30,
+    ),
+)
+
 STRATEGY_CONFIGS = [
     {
         "strategy_path": "strategies:TradeTickRSIReversionStrategy",
         "config_path": "strategies:TradeTickRSIReversionConfig",
         "config": {
-            "trade_size": TRADE_SIZE,
-            "period": RSI_PERIOD,
-            "entry_rsi": ENTRY_RSI,
-            "exit_rsi": EXIT_RSI,
-            "take_profit": TAKE_PROFIT,
-            "stop_loss": STOP_LOSS,
+            "trade_size": Decimal("100"),
+            "period": 20,
+            "entry_rsi": 45.0,
+            "exit_rsi": 53.0,
+            "take_profit": 0.004,
+            "stop_loss": 0.004,
         },
     },
 ]
-SIMS = (MarketSimConfig(market_slug=MARKET_SLUG, lookback_days=LOOKBACK_DAYS),)
+
 REPORT = MarketReportConfig(
-    count_key="trades", count_label="Trades", pnl_label="PnL (USDC)"
+    count_key="trades",
+    count_label="Trades",
+    pnl_label="PnL (USDC)",
 )
+
 BACKTEST = PredictionMarketBacktest(
     name=NAME,
     data=DATA,
     sims=SIMS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=INITIAL_CASH,
-    probability_window=RSI_PERIOD,
-    min_trades=MIN_TRADES,
-    min_price_range=MIN_PRICE_RANGE,
+    initial_cash=100.0,
+    probability_window=20,
+    min_trades=300,
+    min_price_range=0.005,
 )
 
 

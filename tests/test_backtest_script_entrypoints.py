@@ -29,9 +29,8 @@ PMXT_SINGLE_MARKET_QUOTE_TICK_RUNNERS = sorted(
     "relative_path",
     [
         Path("backtests/kalshi_trade_tick_breakout.py"),
-        Path("backtests/polymarket_trade_tick_deep_value_resolution_hold.py"),
         Path("backtests/polymarket_quote_tick_pmxt_ema_crossover.py"),
-        Path("backtests/polymarket_trade_tick_simple_quoter.py"),
+        Path("backtests/polymarket_trade_tick_panic_fade.py"),
         Path("backtests/polymarket_trade_tick_vwap_reversion.py"),
     ],
 )
@@ -88,14 +87,11 @@ def test_public_runner_modules_expose_metadata_contract(
     assert (
         isinstance(globals_dict.get("DESCRIPTION"), str) and globals_dict["DESCRIPTION"]
     )
-    assert globals_dict.get("PLATFORM") in {"kalshi", "polymarket"}
-    assert globals_dict.get("DATA_TYPE") in {"trade_tick", "quote_tick"}
-    assert isinstance(globals_dict.get("VENDOR"), str) and globals_dict["VENDOR"]
     if "DATA" in globals_dict:
         data = globals_dict["DATA"]
-        assert getattr(data, "platform", None) == globals_dict["PLATFORM"]
-        assert getattr(data, "data_type", None) == globals_dict["DATA_TYPE"]
-        assert getattr(data, "vendor", None) == globals_dict["VENDOR"]
+        assert getattr(data, "platform", None) in {"kalshi", "polymarket"}
+        assert getattr(data, "data_type", None) in {"trade_tick", "quote_tick"}
+        assert isinstance(getattr(data, "vendor", None), str) and data.vendor
         assert isinstance(getattr(data, "sources", ()), tuple)
     assert callable(globals_dict.get("run"))
 
@@ -113,13 +109,25 @@ def test_pmxt_single_market_quote_tick_runners_expose_explicit_experiment_consta
 
     globals_dict = runpy.run_path(str(script_path), run_name="__script_test__")
 
-    for key in (
-        "MARKET_SLUG",
-        "TOKEN_INDEX",
-        "START_TIME",
-        "END_TIME",
-        "MIN_QUOTES",
-        "MIN_PRICE_RANGE",
-        "INITIAL_CASH",
-    ):
-        assert key in globals_dict
+    assert "MARKET_SLUG" not in globals_dict
+    assert "TOKEN_INDEX" not in globals_dict
+    assert "START_TIME" not in globals_dict
+    assert "END_TIME" not in globals_dict
+    assert "MIN_QUOTES" not in globals_dict
+    assert "MIN_PRICE_RANGE" not in globals_dict
+    assert "INITIAL_CASH" not in globals_dict
+
+    data = globals_dict["DATA"]
+    sims = globals_dict["SIMS"]
+    backtest = globals_dict["BACKTEST"]
+
+    assert data.platform == "polymarket"
+    assert data.data_type == "quote_tick"
+    assert data.vendor == "pmxt"
+    assert len(sims) == 1
+    assert sims[0].market_slug
+    assert sims[0].start_time
+    assert sims[0].end_time
+    assert backtest.initial_cash == 100.0
+    assert backtest.min_quotes == 500
+    assert backtest.min_price_range == 0.005

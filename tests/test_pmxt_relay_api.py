@@ -32,8 +32,6 @@ def _make_config(tmp_path: Path) -> RelayConfig:
         http_timeout_secs=30,
         archive_stale_pages=3,
         archive_max_pages=None,
-        duckdb_threads=1,
-        duckdb_memory_limit="1GB",
         event_retention=1000,
         api_rate_limit_per_minute=2400,
         api_list_max_hours=2000,
@@ -202,5 +200,87 @@ def test_events_route_tolerates_invalid_payload_json(tmp_path: Path):
 
         assert response.status == 200
         assert payload["events"][0]["payload"] == {"raw_payload": "{not-json"}
+
+    asyncio.run(scenario())
+
+
+def test_worker_badge_reflects_live_service_state(tmp_path: Path):
+    async def scenario() -> None:
+        config = _make_config(tmp_path)
+        config.ensure_directories()
+        app = create_app(config)
+        server = TestServer(app)
+        client = TestClient(server)
+        await client.start_server()
+        try:
+            with patch(
+                "pmxt_relay.api._system_metrics_snapshot",
+                return_value={
+                    "services": {
+                        "worker": {
+                            "label": "Worker service",
+                            "active_state": "failed",
+                            "sub_state": "failed",
+                        }
+                    }
+                },
+            ):
+                response = await client.get("/v1/badge/worker.svg")
+                payload = await response.text()
+        finally:
+            await client.close()
+
+        assert response.status == 200
+        assert "Worker service" in payload
+        assert "failed" in payload
+
+    asyncio.run(scenario())
+
+
+def test_latest_file_badge_reports_latest_mirrored_filename(tmp_path: Path):
+    async def scenario() -> None:
+        config = _make_config(tmp_path)
+        config.ensure_directories()
+        app = create_app(config)
+        index = app[INDEX_APP_KEY]
+        index.upsert_discovered_hour(
+            "polymarket_orderbook_2026-03-21T12.parquet",
+            "https://raw.example.com/polymarket_orderbook_2026-03-21T12.parquet",
+            1,
+        )
+        index.upsert_discovered_hour(
+            "polymarket_orderbook_2026-03-21T13.parquet",
+            "https://raw.example.com/polymarket_orderbook_2026-03-21T13.parquet",
+            1,
+        )
+        index.mark_mirrored(
+            "polymarket_orderbook_2026-03-21T12.parquet",
+            local_path=str(tmp_path / "a.parquet"),
+            etag=None,
+            content_length=1,
+            last_modified=None,
+            processing_enabled=False,
+        )
+        index.mark_mirrored(
+            "polymarket_orderbook_2026-03-21T13.parquet",
+            local_path=str(tmp_path / "b.parquet"),
+            etag=None,
+            content_length=1,
+            last_modified=None,
+            processing_enabled=False,
+        )
+
+        server = TestServer(app)
+        client = TestClient(server)
+        await client.start_server()
+        try:
+            response = await client.get("/v1/badge/latest-file.svg")
+            payload = await response.text()
+        finally:
+            await client.close()
+
+        assert response.status == 200
+        assert "Latest file" in payload
+        assert "polymarket_orderbook_2026-03-21T13.parquet" in payload
 
     asyncio.run(scenario())

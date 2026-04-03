@@ -12,6 +12,8 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.trading.strategy import Strategy
 
 from backtests._shared._strategy_configs import StrategyConfigSpec
+from backtests._shared.data_sources import MarketDataType
+from backtests._shared.data_sources import MarketPlatform
 from backtests._shared.data_sources import MarketDataVendor
 from backtests._shared._kalshi_trade_tick_runner import (
     run_single_market_trade_backtest as run_single_market_kalshi_trade_backtest,
@@ -29,25 +31,28 @@ type StrategyFactory = Callable[[InstrumentId], Strategy]
 
 @dataclass(frozen=True)
 class MarketDataConfig:
-    platform: str
-    data_type: str
+    platform: str | MarketPlatform
+    data_type: str | MarketDataType
     vendor: str | MarketDataVendor
     sources: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        vendor_name = (
-            self.vendor.name
-            if isinstance(self.vendor, MarketDataVendor)
-            else self.vendor
-        )
-        object.__setattr__(self, "platform", self.platform.strip().casefold())
-        object.__setattr__(self, "data_type", self.data_type.strip().casefold())
-        object.__setattr__(self, "vendor", vendor_name.strip().casefold())
+        object.__setattr__(self, "platform", _normalize_name(self.platform))
+        object.__setattr__(self, "data_type", _normalize_name(self.data_type))
+        object.__setattr__(self, "vendor", _normalize_name(self.vendor))
         object.__setattr__(
             self,
             "sources",
             tuple(source.strip() for source in self.sources if source.strip()),
         )
+
+
+def _normalize_name(
+    value: str | MarketPlatform | MarketDataType | MarketDataVendor,
+) -> str:
+    if isinstance(value, str):
+        return value.strip().casefold()
+    return value.name.strip().casefold()
 
 
 async def run_single_market_backtest(

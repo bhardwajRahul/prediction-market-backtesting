@@ -50,6 +50,7 @@ def test_kalshi_trade_tick_runner_uses_unified_summary(monkeypatch, capsys):
             strategy_factory=lambda instrument_id: SimpleNamespace(
                 instrument_id=instrument_id
             ),
+            data_sources=("https://api.elections.kalshi.com",),
         )
     )
 
@@ -103,6 +104,11 @@ def test_polymarket_trade_tick_runner_uses_unified_summary(monkeypatch, capsys):
             emit_html=False,
             strategy_factory=lambda instrument_id: SimpleNamespace(
                 instrument_id=instrument_id
+            ),
+            data_sources=(
+                "gamma-api.polymarket.com",
+                "data-api.polymarket.com/trades",
+                "clob.polymarket.com",
             ),
         )
     )

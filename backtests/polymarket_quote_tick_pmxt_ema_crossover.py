@@ -23,70 +23,63 @@ from backtests._shared._prediction_market_backtest import PredictionMarketBackte
 from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
 from backtests._shared._timing_harness import timing_harness
-from backtests._shared.data_sources import PMXT_VENDOR
+from backtests._shared.data_sources import PMXT, Polymarket, QuoteTick
 
 
 NAME = "polymarket_quote_tick_pmxt_ema_crossover"
+
 DESCRIPTION = "EMA crossover momentum on a single Polymarket market using PMXT L2 data"
-PLATFORM = "polymarket"
-DATA_TYPE = "quote_tick"
-VENDOR = PMXT_VENDOR.name
 
-MARKET_SLUG = "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
-TOKEN_INDEX = 0
-START_TIME = "2026-02-21T16:00:00Z"
-END_TIME = "2026-02-23T10:00:00Z"
-MIN_QUOTES = 500
-MIN_PRICE_RANGE = 0.005
-INITIAL_CASH = 100.0
-PROBABILITY_WINDOW = 256
-
-TRADE_SIZE = Decimal("100")
-FAST_PERIOD = 64
-SLOW_PERIOD = 256
-ENTRY_BUFFER = 0.0005
-TAKE_PROFIT = 0.010
-STOP_LOSS = 0.010
 DATA = MarketDataConfig(
-    platform=PLATFORM,
-    data_type=DATA_TYPE,
-    vendor=PMXT_VENDOR,
-    sources=("/Volumes/LaCie/pmxt_raws",),
+    platform=Polymarket,
+    data_type=QuoteTick,
+    vendor=PMXT,
+    sources=(
+        "/Volumes/LaCie/pmxt_raws",
+        "r2.pmxt.dev",
+        "209-209-10-83.sslip.io",
+    ),
 )
+
+SIMS = (
+    MarketSimConfig(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        token_index=0,
+        start_time="2026-02-21T16:00:00Z",
+        end_time="2026-02-23T10:00:00Z",
+    ),
+)
+
 STRATEGY_CONFIGS = [
     {
         "strategy_path": "strategies:QuoteTickEMACrossoverStrategy",
         "config_path": "strategies:QuoteTickEMACrossoverConfig",
         "config": {
-            "trade_size": TRADE_SIZE,
-            "fast_period": FAST_PERIOD,
-            "slow_period": SLOW_PERIOD,
-            "entry_buffer": ENTRY_BUFFER,
-            "take_profit": TAKE_PROFIT,
-            "stop_loss": STOP_LOSS,
+            "trade_size": Decimal("100"),
+            "fast_period": 64,
+            "slow_period": 256,
+            "entry_buffer": 0.0005,
+            "take_profit": 0.01,
+            "stop_loss": 0.01,
         },
     },
 ]
-SIMS = (
-    MarketSimConfig(
-        market_slug=MARKET_SLUG,
-        token_index=TOKEN_INDEX,
-        start_time=START_TIME,
-        end_time=END_TIME,
-    ),
-)
+
 REPORT = MarketReportConfig(
-    count_key="quotes", count_label="Quotes", pnl_label="PnL (USDC)"
+    count_key="quotes",
+    count_label="Quotes",
+    pnl_label="PnL (USDC)",
 )
+
 BACKTEST = PredictionMarketBacktest(
     name=NAME,
     data=DATA,
     sims=SIMS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=INITIAL_CASH,
-    probability_window=PROBABILITY_WINDOW,
-    min_quotes=MIN_QUOTES,
-    min_price_range=MIN_PRICE_RANGE,
+    initial_cash=100.0,
+    probability_window=256,
+    min_quotes=500,
+    min_price_range=0.005,
 )
 
 

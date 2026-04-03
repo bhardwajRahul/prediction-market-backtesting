@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.request import Request
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+import backtests._shared.data_sources.pmxt as pmxt_module
 from backtests._shared.data_sources.pmxt import PMXT_CACHE_DIR_ENV
 from backtests._shared.data_sources.pmxt import PMXT_DATA_SOURCE_ENV
 from backtests._shared.data_sources.pmxt import PMXT_DISABLE_REMOTE_ARCHIVE_ENV
@@ -16,6 +18,7 @@ from backtests._shared.data_sources.pmxt import PMXT_LOCAL_MIRROR_DIR_ENV
 from backtests._shared.data_sources.pmxt import PMXT_REMOTE_BASE_URL_ENV
 from backtests._shared.data_sources.pmxt import PMXT_RAW_ROOT_ENV
 from backtests._shared.data_sources.pmxt import PMXT_RELAY_BASE_URL_ENV
+from backtests._shared.data_sources.pmxt import PMXT_SOURCE_PRIORITY_ENV
 from backtests._shared.data_sources.pmxt import RunnerPolymarketPMXTDataLoader
 from backtests._shared.data_sources.pmxt import configured_pmxt_data_source
 
@@ -29,7 +32,13 @@ def _make_loader(
     loader = object.__new__(RunnerPolymarketPMXTDataLoader)
     loader._pmxt_cache_dir = cache_dir
     loader._pmxt_local_archive_dir = None
+    loader._pmxt_remote_base_url = None
     loader._pmxt_relay_base_url = None
+    loader._pmxt_source_priority = (
+        "raw-local",
+        "raw-remote",
+        "relay-raw",
+    )
     loader._condition_id = "condition-123"
     loader._token_id = "token-yes-123"
     loader._pmxt_prefetch_workers = 2
@@ -116,21 +125,27 @@ def test_configured_pmxt_data_source_preserves_explicit_source_order(
     with configured_pmxt_data_source(
         sources=[
             "cache",
-            str(mirror_root),
             "archive.vendor.test",
+            str(mirror_root),
             "relay.vendor.test",
         ]
     ) as selection:
         assert selection.mode == "auto"
-        assert str(mirror_root) in selection.summary
+        assert selection.summary == (
+            "PMXT source: explicit priority "
+            f"(cache -> https://archive.vendor.test -> {mirror_root} "
+            "-> https://relay.vendor.test)"
+        )
         assert os.environ[PMXT_RAW_ROOT_ENV] == str(mirror_root)
         assert os.environ[PMXT_REMOTE_BASE_URL_ENV] == "https://archive.vendor.test"
         assert os.environ[PMXT_RELAY_BASE_URL_ENV] == "https://relay.vendor.test"
+        assert os.environ[PMXT_SOURCE_PRIORITY_ENV] == "raw-remote,raw-local,relay-raw"
         assert PMXT_DISABLE_REMOTE_ARCHIVE_ENV not in os.environ
 
     assert os.getenv(PMXT_RAW_ROOT_ENV) is None
     assert os.getenv(PMXT_REMOTE_BASE_URL_ENV) is None
     assert os.getenv(PMXT_RELAY_BASE_URL_ENV) is None
+    assert os.getenv(PMXT_SOURCE_PRIORITY_ENV) is None
 
 
 def test_runner_loader_reads_market_rows_from_local_raw_mirror(tmp_path):
@@ -172,3 +187,94 @@ def test_runner_loader_reads_market_rows_from_local_raw_mirror(tmp_path):
             "data": '{"token_id":"token-yes-123","seq":1}',
         },
     ]
+
+
+def test_runner_loader_never_uses_filtered_relay_path() -> None:
+    loader = _make_loader()
+    hour = pd.Timestamp("2026-03-21T12:00:00Z")
+
+    assert loader._relay_url_for_hour(hour) is None
+
+
+def test_runner_loader_honors_explicit_source_priority(monkeypatch) -> None:
+    loader = _make_loader()
+    loader._pmxt_source_priority = ("raw-remote", "raw-local", "relay-raw")
+    calls: list[str] = []
+
+    monkeypatch.setattr(loader, "_load_cached_market_batches", lambda hour: None)
+    monkeypatch.setattr(
+        loader,
+        "_load_remote_market_batches",
+        lambda hour, *, batch_size: calls.append("raw-remote") or None,
+    )
+    monkeypatch.setattr(
+        loader,
+        "_load_local_archive_market_batches",
+        lambda hour, *, batch_size: calls.append("raw-local") or [],
+    )
+    monkeypatch.setattr(
+        loader,
+        "_load_relay_raw_market_batches",
+        lambda hour, *, batch_size: calls.append("relay-raw") or [],
+    )
+
+    assert (
+        loader._load_market_batches(
+            pd.Timestamp("2026-03-21T12:00:00Z"),
+            batch_size=1_000,
+        )
+        == []
+    )
+    assert calls == ["raw-remote", "raw-local"]
+
+
+def test_runner_loader_uses_user_agent_for_remote_downloads(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    loader = _make_loader()
+    payload = b"pmxt-test-payload"
+    captured_request: Request | None = None
+
+    class FakeResponse:
+        def __init__(self, body: bytes) -> None:
+            self._body = body
+            self._offset = 0
+            self.headers = {"Content-Length": str(len(body))}
+
+        def read(self, size: int = -1) -> bytes:
+            if self._offset >= len(self._body):
+                return b""
+            if size < 0:
+                chunk = self._body[self._offset :]
+                self._offset = len(self._body)
+                return chunk
+            chunk = self._body[self._offset : self._offset + size]
+            self._offset += len(chunk)
+            return chunk
+
+        def __enter__(self) -> FakeResponse:
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    def fake_urlopen(request):
+        nonlocal captured_request
+        captured_request = request
+        return FakeResponse(payload)
+
+    monkeypatch.setattr(pmxt_module, "urlopen", fake_urlopen)
+
+    destination = tmp_path / "download.parquet"
+    total_bytes = loader._download_to_file_with_progress(
+        "https://r2.pmxt.dev/polymarket_orderbook_2026-02-22T11.parquet",
+        destination,
+    )
+
+    assert total_bytes == len(payload)
+    assert destination.read_bytes() == payload
+    assert captured_request is not None
+    assert dict(captured_request.header_items())["User-agent"] == (
+        "prediction-market-backtesting/1.0"
+    )

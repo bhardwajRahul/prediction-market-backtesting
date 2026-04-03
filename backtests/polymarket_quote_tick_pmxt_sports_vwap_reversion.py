@@ -23,100 +23,93 @@ from backtests._shared._prediction_market_backtest import PredictionMarketBackte
 from backtests._shared._prediction_market_backtest import finalize_market_results
 from backtests._shared._prediction_market_runner import MarketDataConfig
 from backtests._shared._timing_harness import timing_harness
-from backtests._shared.data_sources import PMXT_VENDOR
+from backtests._shared.data_sources import PMXT, Polymarket, QuoteTick
 
 
 NAME = "polymarket_quote_tick_pmxt_sports_vwap_reversion"
-DESCRIPTION = "VWAP reversion on a fixed Polymarket sports basket using PMXT L2 data"
-PLATFORM = "polymarket"
-DATA_TYPE = "quote_tick"
-VENDOR = PMXT_VENDOR.name
 
-MIN_QUOTES = 500
-MIN_PRICE_RANGE = 0.005
-VWAP_WINDOW = 30
-ENTRY_THRESHOLD = 0.0015
-EXIT_THRESHOLD = 0.0003
-MIN_TICK_SIZE = 0.0
-TAKE_PROFIT = 0.004
-STOP_LOSS = 0.004
-TRADE_SIZE = Decimal("100")
-INITIAL_CASH = 100.0
-NAUTILUS_LOG_LEVEL = "INFO"
+DESCRIPTION = "VWAP reversion on a fixed Polymarket sports basket using PMXT L2 data"
 
 DATA = MarketDataConfig(
-    platform=PLATFORM,
-    data_type=DATA_TYPE,
-    vendor=PMXT_VENDOR,
-    sources=("/Volumes/LaCie/pmxt_raws",),
+    platform=Polymarket,
+    data_type=QuoteTick,
+    vendor=PMXT,
+    sources=(
+        "/Volumes/LaCie/pmxt_raws",
+        "r2.pmxt.dev",
+        "209-209-10-83.sslip.io",
+    ),
 )
+
 SIMS = (
     MarketSimConfig(
         market_slug="will-ukraine-qualify-for-the-2026-fifa-world-cup",
         token_index=0,
-        outcome="Yes",
         start_time="2026-02-21T16:00:00Z",
         end_time="2026-02-23T10:00:00Z",
+        outcome="Yes",
     ),
     MarketSimConfig(
         market_slug="will-man-city-win-the-202526-champions-league",
         token_index=0,
-        outcome="Yes",
         start_time="2026-02-21T16:00:00Z",
         end_time="2026-02-23T10:00:00Z",
+        outcome="Yes",
     ),
     MarketSimConfig(
         market_slug="will-chelsea-win-the-202526-champions-league",
         token_index=0,
-        outcome="Yes",
         start_time="2026-02-21T16:00:00Z",
         end_time="2026-02-23T10:00:00Z",
+        outcome="Yes",
     ),
     MarketSimConfig(
         market_slug="will-newcastle-win-the-202526-champions-league",
         token_index=0,
-        outcome="Yes",
         start_time="2026-02-21T16:00:00Z",
         end_time="2026-02-23T10:00:00Z",
+        outcome="Yes",
     ),
     MarketSimConfig(
         market_slug="will-leverkusen-win-the-202526-champions-league",
         token_index=0,
-        outcome="Yes",
         start_time="2026-02-21T16:00:00Z",
         end_time="2026-02-23T10:00:00Z",
+        outcome="Yes",
     ),
 )
+
 STRATEGY_CONFIGS = [
     {
         "strategy_path": "strategies:QuoteTickVWAPReversionStrategy",
         "config_path": "strategies:QuoteTickVWAPReversionConfig",
         "config": {
-            "trade_size": TRADE_SIZE,
-            "vwap_window": VWAP_WINDOW,
-            "entry_threshold": ENTRY_THRESHOLD,
-            "exit_threshold": EXIT_THRESHOLD,
-            "min_tick_size": MIN_TICK_SIZE,
-            "take_profit": TAKE_PROFIT,
-            "stop_loss": STOP_LOSS,
+            "trade_size": Decimal("100"),
+            "vwap_window": 30,
+            "entry_threshold": 0.0015,
+            "exit_threshold": 0.0003,
+            "min_tick_size": 0.0,
+            "take_profit": 0.004,
+            "stop_loss": 0.004,
         },
     },
 ]
+
 REPORT = MarketReportConfig(
     count_key="quotes",
     count_label="Quotes",
     pnl_label="PnL (USDC)",
 )
+
 BACKTEST = PredictionMarketBacktest(
     name=NAME,
     data=DATA,
     sims=SIMS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=INITIAL_CASH,
-    probability_window=VWAP_WINDOW,
-    min_quotes=MIN_QUOTES,
-    min_price_range=MIN_PRICE_RANGE,
-    nautilus_log_level=NAUTILUS_LOG_LEVEL,
+    initial_cash=100.0,
+    probability_window=30,
+    min_quotes=500,
+    min_price_range=0.005,
 )
 
 
