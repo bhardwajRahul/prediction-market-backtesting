@@ -79,17 +79,14 @@ def test_kalshi_backtests_build_expected_trade_tick_strategy(
 
     assert isinstance(strategy, strategy_cls)
     assert isinstance(strategy.config, config_cls)
-    assert module.SIMS == (
-        module.MarketSimConfig(
-            market_ticker=module.MARKET_TICKER,
-            lookback_days=module.LOOKBACK_DAYS,
-        ),
-    )
+    assert len(module.SIMS) == 1
+    assert module.SIMS[0].market_ticker == "KXNEXTIRANLEADER-45JAN01-MKHA"
+    assert module.SIMS[0].lookback_days == 30
     assert module.BACKTEST.name == module.NAME
     assert module.BACKTEST.data == module.DATA
     assert module.BACKTEST.sims == module.SIMS
-    assert module.BACKTEST.initial_cash == module.INITIAL_CASH
-    assert module.BACKTEST.min_trades == module.MIN_TRADES
-    assert module.BACKTEST.min_price_range == module.MIN_PRICE_RANGE
+    assert module.BACKTEST.initial_cash == 100.0
+    assert module.BACKTEST.min_trades == 1000
+    assert module.BACKTEST.min_price_range == 0.03
     assert captured["backtest"] is module.BACKTEST
     assert captured["report"] == module.REPORT

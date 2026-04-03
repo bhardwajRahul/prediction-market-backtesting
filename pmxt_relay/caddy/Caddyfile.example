@@ -1,4 +1,4 @@
-209-209-10-83.sslip.io {
+mirror.example.com {
     encode gzip
 
     # Serve mirrored raw parquet straight from disk so large backfill downloads

@@ -529,6 +529,23 @@ def _latest_processed_badge_payload(
     )
 
 
+def _latest_file_badge_payload(
+    *,
+    queue: dict[str, int | str | None],
+) -> dict[str, object]:
+    latest_filename = queue.get("latest_mirrored_filename")
+    filename_label = (
+        latest_filename
+        if isinstance(latest_filename, str) and latest_filename
+        else None
+    )
+    return _badge_payload(
+        label="Latest file",
+        message=filename_label or "none",
+        color="blue" if filename_label is not None else "lightgrey",
+    )
+
+
 def _lag_badge_payload(
     *,
     stats: dict[str, int | str | None],
@@ -996,11 +1013,19 @@ def _service_running_badge_payload(label: str) -> dict[str, object]:
 
 
 async def badge_api_svg(request: web.Request) -> web.Response:
-    return _badge_svg_response(_service_running_badge_payload("API service"))
+    config = request.app[CONFIG_APP_KEY]
+    metrics = await asyncio.to_thread(_system_metrics_snapshot, config)
+    return _badge_svg_response(
+        _service_badge_payload(_service_metrics_for_badge(metrics, "api"))
+    )
 
 
 async def badge_worker_svg(request: web.Request) -> web.Response:
-    return _badge_svg_response(_service_running_badge_payload("Worker service"))
+    config = request.app[CONFIG_APP_KEY]
+    metrics = await asyncio.to_thread(_system_metrics_snapshot, config)
+    return _badge_svg_response(
+        _service_badge_payload(_service_metrics_for_badge(metrics, "worker"))
+    )
 
 
 async def badge_mirroring_svg(request: web.Request) -> web.Response:
@@ -1064,6 +1089,13 @@ async def badge_latest_svg(request: web.Request) -> web.Response:
     index = request.app[INDEX_APP_KEY]
     return _badge_svg_response(
         _latest_processed_badge_payload(queue=await _index_queue_summary_async(index))
+    )
+
+
+async def badge_latest_file_svg(request: web.Request) -> web.Response:
+    index = request.app[INDEX_APP_KEY]
+    return _badge_svg_response(
+        _latest_file_badge_payload(queue=await _index_queue_summary_async(index))
     )
 
 
@@ -1147,6 +1179,7 @@ def create_app(config: RelayConfig) -> web.Application:
     app.router.add_get("/v1/badge/mirrored.svg", badge_mirrored_svg)
     app.router.add_get("/v1/badge/processed.svg", badge_processed_svg)
     app.router.add_get("/v1/badge/latest.svg", badge_latest_svg)
+    app.router.add_get("/v1/badge/latest-file.svg", badge_latest_file_svg)
     app.router.add_get("/v1/badge/lag.svg", badge_lag_svg)
     app.router.add_get("/v1/badge/rate.svg", badge_rate_svg)
     app.router.add_get("/v1/badge/file.svg", badge_file_svg)

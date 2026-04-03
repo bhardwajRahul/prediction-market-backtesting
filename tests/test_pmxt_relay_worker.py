@@ -21,8 +21,6 @@ def _make_config(tmp_path: Path) -> RelayConfig:
         http_timeout_secs=30,
         archive_stale_pages=3,
         archive_max_pages=None,
-        duckdb_threads=1,
-        duckdb_memory_limit="1GB",
         event_retention=1000,
         api_rate_limit_per_minute=2400,
         api_list_max_hours=2000,

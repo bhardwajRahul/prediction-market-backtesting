@@ -42,6 +42,11 @@ EXPECTED_MARKET_SLUG = (
 )
 EXPECTED_START_TIME = DEFAULT_PMXT_RELAY_SAMPLE_START_TIME
 EXPECTED_END_TIME = DEFAULT_PMXT_RELAY_SAMPLE_END_TIME
+EXPECTED_PMXT_SOURCES = (
+    "/Volumes/LaCie/pmxt_raws",
+    "r2.pmxt.dev",
+    "209-209-10-83.sslip.io",
+)
 
 
 @pytest.mark.parametrize(
@@ -128,10 +133,11 @@ def test_pmxt_backtests_build_expected_quote_tick_strategy(
     assert module.BACKTEST.name == module.NAME
     assert module.BACKTEST.data == module.DATA
     assert module.BACKTEST.sims == module.SIMS
-    assert module.BACKTEST.initial_cash == module.INITIAL_CASH
-    assert module.BACKTEST.min_quotes == module.MIN_QUOTES
-    assert module.BACKTEST.min_price_range == module.MIN_PRICE_RANGE
-    assert module.BACKTEST.probability_window == module.PROBABILITY_WINDOW
+    assert module.BACKTEST.initial_cash == 100.0
+    assert module.BACKTEST.min_quotes == 500
+    assert module.BACKTEST.min_price_range == 0.005
+    assert module.BACKTEST.probability_window > 0
+    assert module.DATA.sources == EXPECTED_PMXT_SOURCES
     assert len(module.SIMS) == 1
     sim = module.SIMS[0]
     assert sim.market_slug == EXPECTED_MARKET_SLUG
@@ -171,10 +177,11 @@ def test_pmxt_sports_backtest_uses_fixed_samples(
     assert module.BACKTEST.name == module.NAME
     assert module.BACKTEST.data == module.DATA
     assert module.BACKTEST.sims == module.SIMS
-    assert module.BACKTEST.initial_cash == module.INITIAL_CASH
-    assert module.BACKTEST.min_quotes == module.MIN_QUOTES
-    assert module.BACKTEST.min_price_range == module.MIN_PRICE_RANGE
-    assert module.BACKTEST.probability_window == module.VWAP_WINDOW
+    assert module.BACKTEST.initial_cash == 100.0
+    assert module.BACKTEST.min_quotes == 500
+    assert module.BACKTEST.min_price_range == 0.005
+    assert module.BACKTEST.probability_window == 30
+    assert module.DATA.sources == EXPECTED_PMXT_SOURCES
     assert len(module.SIMS) == 5
     for sim in module.SIMS:
         assert sim.market_slug

@@ -79,26 +79,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "worker":
-        RelayWorker(
-            config,
-            reset_prebuild_inflight=False,
-            skip_prebuild=True,
-        ).run_forever()
+        RelayWorker(config).run_forever()
         return 0
 
     if args.command == "sync-once":
         if args.limit is None:
-            RelayWorker(
-                config,
-                reset_prebuild_inflight=False,
-                skip_prebuild=True,
-            ).run_once()
+            RelayWorker(config).run_once()
         else:
-            worker = RelayWorker(
-                config,
-                reset_prebuild_inflight=False,
-                skip_prebuild=True,
-            )
+            worker = RelayWorker(config)
             discovered = worker._discover_archive_hours()  # noqa: SLF001
             mirrored = worker._mirror_pending_hours()  # noqa: SLF001
             print(

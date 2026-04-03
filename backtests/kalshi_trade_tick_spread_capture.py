@@ -26,64 +26,60 @@ from backtests._shared._prediction_market_backtest import PredictionMarketBackte
 from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
 from backtests._shared._timing_harness import timing_harness
-from backtests._shared.data_sources import NATIVE_VENDOR
+from backtests._shared.data_sources import Kalshi, Native, TradeTick
 
 
 # ── Strategy metadata (shown in the menu) ────────────────────────────────────
 NAME = "kalshi_trade_tick_spread_capture"
+
 DESCRIPTION = (
     "Mean-reversion spread capture on a single Kalshi market using trade ticks"
 )
-PLATFORM = "kalshi"
-DATA_TYPE = "trade_tick"
-VENDOR = NATIVE_VENDOR.name
 
-# ── Configure here ────────────────────────────────────────────────────────────
-MARKET_TICKER = "KXNEXTIRANLEADER-45JAN01-MKHA"
-LOOKBACK_DAYS = 30
-MIN_TRADES = 1000
-MIN_PRICE_RANGE = 0.03
-
-VWAP_WINDOW = 20  # rolling average window
-ENTRY_THRESHOLD = 0.01  # enter when close is 1¢ below rolling average (0-1 scale)
-TAKE_PROFIT = 0.01  # exit when price recovers 1¢ above fill price
-STOP_LOSS = 0.03  # stop out 3¢ below fill price
-TRADE_SIZE = Decimal(1)
-INITIAL_CASH = 100.0
 DATA = MarketDataConfig(
-    platform=PLATFORM,
-    data_type=DATA_TYPE,
-    vendor=NATIVE_VENDOR,
-    sources=(),
+    platform=Kalshi,
+    data_type=TradeTick,
+    vendor=Native,
+    sources=("https://api.elections.kalshi.com/trade-api/v2",),
 )
+
+SIMS = (
+    MarketSimConfig(
+        market_ticker="KXNEXTIRANLEADER-45JAN01-MKHA",
+        lookback_days=30,
+    ),
+)
+
 STRATEGY_CONFIGS = [
     {
         "strategy_path": "strategies:TradeTickMeanReversionStrategy",
         "config_path": "strategies:TradeTickMeanReversionConfig",
         "config": {
-            "trade_size": TRADE_SIZE,
-            "vwap_window": VWAP_WINDOW,
-            "entry_threshold": ENTRY_THRESHOLD,
-            "take_profit": TAKE_PROFIT,
-            "stop_loss": STOP_LOSS,
+            "trade_size": Decimal("1"),
+            "vwap_window": 20,
+            "entry_threshold": 0.01,
+            "take_profit": 0.01,
+            "stop_loss": 0.03,
         },
     },
 ]
-SIMS = (MarketSimConfig(market_ticker=MARKET_TICKER, lookback_days=LOOKBACK_DAYS),)
+
 REPORT = MarketReportConfig(
-    count_key="trades", count_label="Trades", pnl_label="PnL (USD)"
+    count_key="trades",
+    count_label="Trades",
+    pnl_label="PnL (USD)",
 )
+
 BACKTEST = PredictionMarketBacktest(
     name=NAME,
     data=DATA,
     sims=SIMS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=INITIAL_CASH,
-    probability_window=VWAP_WINDOW,
-    min_trades=MIN_TRADES,
-    min_price_range=MIN_PRICE_RANGE,
+    initial_cash=100.0,
+    probability_window=20,
+    min_trades=1000,
+    min_price_range=0.03,
 )
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 @timing_harness

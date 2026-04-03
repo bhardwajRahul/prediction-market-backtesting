@@ -5,7 +5,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from pmxt_relay.local_processing import process_local_raw_mirror
+from pmxt_local.local_processing import process_local_raw_mirror
 
 
 def test_process_local_raw_mirror_writes_filtered_layout(tmp_path: Path) -> None:

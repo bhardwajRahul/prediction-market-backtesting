@@ -13,11 +13,10 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
-from pmxt_relay.config import RelayConfig
+from pmxt_local.config import LocalProcessingConfig
 from pmxt_relay.index_db import FilteredHourArtifact
 from pmxt_relay.storage import parse_archive_hour
-from pmxt_relay.storage import filtered_relative_path
-from pmxt_relay.storage import processed_relative_path
+from pmxt_local.paths import filtered_relative_path
 
 
 TOKEN_ID_REGEX = r'"token_id"\s*:\s*"(?P<token>[^"]+)"'
@@ -145,7 +144,7 @@ def _materialize_partition_artifact(
 
 
 class RelayHourProcessor:
-    def __init__(self, config: RelayConfig) -> None:
+    def __init__(self, config: LocalProcessingConfig) -> None:
         self._config = config
 
     def process_hour(
@@ -162,12 +161,12 @@ class RelayHourProcessor:
         temp_root = self._config.tmp_root / f"{filename}.filtered"
         temp_path = temp_root / "hour.parquet"
         partition_root = temp_root / "partitions"
-        final_path = self._config.processed_root / processed_relative_path(filename)
         shutil.rmtree(temp_root, ignore_errors=True)
         if write_processed or not skip_filtered:
             temp_root.mkdir(parents=True, exist_ok=True)
         if not skip_filtered:
             partition_root.mkdir(parents=True, exist_ok=True)
+        final_path = temp_root / "processed.parquet"
         if write_processed:
             final_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -222,8 +221,6 @@ class RelayHourProcessor:
                 writer = None
 
             if not wrote_any:
-                if write_processed:
-                    final_path.unlink(missing_ok=True)
                 return ProcessedHourResult(
                     artifacts=[],
                     total_filtered_rows=0,
@@ -248,67 +245,6 @@ class RelayHourProcessor:
         finally:
             if writer is not None:
                 writer.close()
-            shutil.rmtree(temp_root, ignore_errors=True)
-
-    def prebuild_filtered_from_processed(
-        self,
-        filename: str,
-        processed_path: Path,
-        *,
-        progress_callback: Callable[[int, int], None] | None = None,
-    ) -> list[FilteredHourArtifact]:
-        hour = parse_archive_hour(filename).isoformat()
-        temp_root = self._config.tmp_root / f"{filename}.prebuild.filtered"
-        partition_root = temp_root / "partitions"
-        shutil.rmtree(temp_root, ignore_errors=True)
-        partition_root.mkdir(parents=True, exist_ok=True)
-
-        try:
-            parquet_file = pq.ParquetFile(processed_path)
-            total_rows = parquet_file.metadata.num_rows
-            processed_rows = 0
-            partition_counter = 0
-            wrote_any = False
-            if progress_callback is not None:
-                progress_callback(0, total_rows)
-
-            for batch in parquet_file.iter_batches(
-                columns=["market_id", "token_id", "update_type", "data"],
-                batch_size=PARQUET_BATCH_SIZE,
-                use_threads=True,
-            ):
-                if batch.num_rows == 0:
-                    continue
-                row_indices = pa.array(
-                    range(processed_rows, processed_rows + batch.num_rows),
-                    type=pa.int64(),
-                )
-                partition_batch = pa.record_batch(
-                    [
-                        batch.column(0),
-                        batch.column(1),
-                        row_indices,
-                        batch.column(2),
-                        batch.column(3),
-                    ],
-                    schema=PARTITION_SCHEMA,
-                )
-                self._write_partition_batch(
-                    partition_batch,
-                    partition_root,
-                    basename_template=f"part-{partition_counter:08d}-{{i}}.parquet",
-                )
-                processed_rows += batch.num_rows
-                partition_counter += 1
-                wrote_any = True
-                if progress_callback is not None:
-                    progress_callback(processed_rows, total_rows)
-
-            if not wrote_any:
-                return []
-
-            return self._materialize_partition_tree(filename, hour, partition_root)
-        finally:
             shutil.rmtree(temp_root, ignore_errors=True)
 
     def _iter_filtered_batches(self, parquet_file: pq.ParquetFile):  # type: ignore[no-untyped-def]

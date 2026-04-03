@@ -7,18 +7,18 @@ L2 order-book data one hour at a time. In the current codebase, the hour lookup
 order is:
 
 1. local filtered cache
-2. local raw PMXT archive
-3. relay-hosted filtered parquet, if the configured relay supports it
-4. remote raw PMXT archive
-5. relay-hosted raw PMXT archive hour
-6. none
+2. each explicit source in `DATA.sources`, left to right
+3. none
 
 Two practical notes matter here:
 
 - the shared public relay for this repository is mirror-first, so raw-hour
   serving is the supported shared-server path
-- the filtered-relay tier still exists in the vendored loader for people who
-  run their own legacy or full-stack PMXT relay
+- the public runner layer disables relay-hosted filtered parquet
+- PMXT upstream raw hours live at flat object URLs like
+  `https://r2.pmxt.dev/polymarket_orderbook_YYYY-MM-DDTHH.parquet`, while the
+  local mirror serves those same files under dated `/v1/raw/YYYY/MM/DD/...`
+  paths
 
 After a successful fetch from a raw source, the result is written to the local
 filtered cache so subsequent runs are fast.
@@ -51,7 +51,6 @@ The important signal is the rightmost source column:
 |---|---|---|
 | Local cache | <0.05s | Second run onward for the same market/token/hour |
 | Local raw PMXT archive | local disk bound | You mirrored raw PMXT hours locally and pointed `DATA_SOURCES` or `PMXT_RAW_ROOT` at them |
-| Relay filtered parquet | remote parquet read | Only if you point the loader at a relay that still serves `/v1/filtered/...` |
 | Remote raw PMXT archive | network and file-size bound | Hour is missing from local cache and local raw mirror, so the client downloads the upstream raw parquet to a temp file and filters it locally |
 | Relay raw mirror | network and file-size bound | A mirror-only relay serves `/v1/raw/...`, so the client downloads the raw parquet to a temp file and filters it locally |
 | None | <1s | Hour does not exist yet |

@@ -6,8 +6,9 @@ from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 
-from pmxt_relay.processor import RelayHourProcessor
+from pmxt_local.config import LocalProcessingConfig
 from pmxt_relay.storage import parse_archive_hour
+from pmxt_local.processor import RelayHourProcessor
 
 
 def _parse_hour_bound(value: str | None) -> datetime | None:
@@ -26,14 +27,6 @@ def _parse_hour_bound(value: str | None) -> datetime | None:
         else:
             parsed = parsed.astimezone(UTC)
     return parsed.replace(minute=0, second=0, microsecond=0)
-
-
-@dataclass(frozen=True)
-class LocalProcessingConfig:
-    filtered_root: Path
-    tmp_root: Path
-    filtered_materialization_workers: int
-    processed_root: Path
 
 
 @dataclass(frozen=True)
@@ -108,7 +101,6 @@ def process_local_raw_mirror(
             filtered_root=normalized_filtered_root,
             tmp_root=normalized_tmp_root,
             filtered_materialization_workers=max(1, workers),
-            processed_root=normalized_tmp_root / "processed-unused",
         )
     )
 

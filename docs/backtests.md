@@ -226,6 +226,8 @@ workflows:
 - PMXT is the first documented quote-tick vendor adapter in this repo
 - the preferred sustained workflow is local-first: mirror raw archive hours onto
   local disk, then point `DATA.sources` at that mirror
+- after cache, PMXT quote-tick runners try the remaining `DATA.sources` entries
+  in the exact order you list them
 - the local PMXT filtered cache is enabled by default at
   `~/.cache/nautilus_trader/pmxt`
 - the shared public relay is now treated as a raw mirror service; filtered relay

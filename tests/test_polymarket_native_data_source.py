@@ -33,7 +33,7 @@ def test_configured_polymarket_native_data_source_maps_explicit_endpoints() -> N
         )
         assert (
             os.environ[POLYMARKET_TRADE_API_BASE_URL_ENV]
-            == "https://data-api.polymarket.com"
+            == "https://data-api.polymarket.com/trades"
         )
         assert os.environ[POLYMARKET_CLOB_BASE_URL_ENV] == "https://clob.polymarket.com"
 

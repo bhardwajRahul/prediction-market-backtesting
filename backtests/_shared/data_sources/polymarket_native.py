@@ -4,6 +4,7 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Sequence
+from urllib.parse import urlparse
 
 import msgspec
 
@@ -19,6 +20,17 @@ from backtests._shared.data_sources._common import trim_url_suffix
 POLYMARKET_GAMMA_BASE_URL_ENV = "POLYMARKET_GAMMA_BASE_URL"
 POLYMARKET_CLOB_BASE_URL_ENV = "POLYMARKET_CLOB_BASE_URL"
 POLYMARKET_TRADE_API_BASE_URL_ENV = "POLYMARKET_TRADE_API_BASE_URL"
+_POLYMARKET_GAMMA_SUFFIXES = ("/markets", "/events", "/markets/slug")
+_POLYMARKET_CLOB_SUFFIXES = ("/markets", "/fee-rate")
+_POLYMARKET_TRADES_SUFFIXES = ("/trades",)
+_POLYMARKET_SOURCE_ROLE_ALIASES = {
+    "gamma": POLYMARKET_GAMMA_BASE_URL_ENV,
+    "markets": POLYMARKET_GAMMA_BASE_URL_ENV,
+    "clob": POLYMARKET_CLOB_BASE_URL_ENV,
+    "orderbook": POLYMARKET_CLOB_BASE_URL_ENV,
+    "trades": POLYMARKET_TRADE_API_BASE_URL_ENV,
+    "trade_api": POLYMARKET_TRADE_API_BASE_URL_ENV,
+}
 
 
 @dataclass(frozen=True)
@@ -28,31 +40,34 @@ class PolymarketNativeDataSourceSelection:
 
 class RunnerPolymarketDataLoader(PolymarketDataLoader):
     @classmethod
-    def _configured_gamma_base_url(cls) -> str | None:
+    def _configured_gamma_base_url(cls) -> str:
         value = env_value(os.getenv(POLYMARKET_GAMMA_BASE_URL_ENV))
-        if is_disabled(value):
-            return None
-        if value is None:
-            return None
-        return trim_url_suffix(value, ("/markets", "/events"))
+        if is_disabled(value) or value is None:
+            raise ValueError(
+                "Polymarket native data source requires a gamma base URL via "
+                "DATA.sources or POLYMARKET_GAMMA_BASE_URL."
+            )
+        return trim_url_suffix(value, _POLYMARKET_GAMMA_SUFFIXES)
 
     @classmethod
-    def _configured_clob_base_url(cls) -> str | None:
+    def _configured_clob_base_url(cls) -> str:
         value = env_value(os.getenv(POLYMARKET_CLOB_BASE_URL_ENV))
-        if is_disabled(value):
-            return None
-        if value is None:
-            return None
-        return trim_url_suffix(value, ("/markets", "/fee-rate"))
+        if is_disabled(value) or value is None:
+            raise ValueError(
+                "Polymarket native data source requires a clob base URL via "
+                "DATA.sources or POLYMARKET_CLOB_BASE_URL."
+            )
+        return trim_url_suffix(value, _POLYMARKET_CLOB_SUFFIXES)
 
     @classmethod
-    def _configured_trade_api_base_url(cls) -> str | None:
+    def _configured_trade_api_base_url(cls) -> str:
         value = env_value(os.getenv(POLYMARKET_TRADE_API_BASE_URL_ENV))
-        if is_disabled(value):
-            return None
-        if value is None:
-            return None
-        return trim_url_suffix(value, ("/trades",))
+        if is_disabled(value) or value is None:
+            raise ValueError(
+                "Polymarket native data source requires a trades base URL via "
+                "DATA.sources or POLYMARKET_TRADE_API_BASE_URL."
+            )
+        return trim_url_suffix(value, _POLYMARKET_TRADES_SUFFIXES)
 
     @classmethod
     async def _fetch_market_by_slug(
@@ -61,9 +76,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         http_client,
     ) -> dict[str, Any]:
         gamma_base_url = cls._configured_gamma_base_url()
-        if gamma_base_url is None:
-            return await super()._fetch_market_by_slug(slug, http_client)
-
         response = await http_client.get(url=f"{gamma_base_url}/markets/slug/{slug}")
         if response.status == 404:
             raise ValueError(f"Market with slug '{slug}' not found")
@@ -93,9 +105,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         http_client,
     ) -> dict[str, Any]:
         clob_base_url = cls._configured_clob_base_url()
-        if clob_base_url is None:
-            return await super()._fetch_market_details(condition_id, http_client)
-
         response = await http_client.get(url=f"{clob_base_url}/markets/{condition_id}")
         if response.status != 200:
             raise RuntimeError(
@@ -110,9 +119,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         http_client,
     ):
         clob_base_url = cls._configured_clob_base_url()
-        if clob_base_url is None:
-            return await super()._fetch_market_fee_rate_bps(token_id, http_client)
-
         response = await http_client.get(
             url=f"{clob_base_url}/fee-rate",
             params={"token_id": token_id},
@@ -136,9 +142,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         http_client,
     ) -> dict[str, Any]:
         gamma_base_url = cls._configured_gamma_base_url()
-        if gamma_base_url is None:
-            return await super()._fetch_event_by_slug(slug, http_client)
-
         response = await http_client.get(
             url=f"{gamma_base_url}/events",
             params={"slug": slug},
@@ -164,15 +167,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         gamma_base_url = self._configured_gamma_base_url()
-        if gamma_base_url is None:
-            return await super().fetch_events(
-                active=active,
-                closed=closed,
-                archived=archived,
-                limit=limit,
-                offset=offset,
-            )
-
         params = {
             "active": str(active).lower(),
             "closed": str(closed).lower(),
@@ -199,15 +193,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         offset: int = 0,
     ) -> list[dict]:
         gamma_base_url = self._configured_gamma_base_url()
-        if gamma_base_url is None:
-            return await super().fetch_markets(
-                active=active,
-                closed=closed,
-                archived=archived,
-                limit=limit,
-                offset=offset,
-            )
-
         params = {
             "active": str(active).lower(),
             "closed": str(closed).lower(),
@@ -233,14 +218,6 @@ class RunnerPolymarketDataLoader(PolymarketDataLoader):
         end_ts: int | None = None,
     ) -> list[dict[str, Any]]:
         trade_api_base_url = self._configured_trade_api_base_url()
-        if trade_api_base_url is None:
-            return await super().fetch_trades(
-                condition_id=condition_id,
-                limit=limit,
-                start_ts=start_ts,
-                end_ts=end_ts,
-            )
-
         all_trades: list[dict[str, Any]] = []
         offset = 0
         page_limit = min(limit, self._TRADES_PAGE_LIMIT)
@@ -303,16 +280,97 @@ def _summary_from_overrides(
     if clob_base_url is not None:
         parts.append(f"clob={clob_base_url}")
     if not parts:
-        return "Polymarket source: native public endpoints"
+        raise ValueError(
+            "Polymarket native data source requires explicit gamma, trades, and clob "
+            "base URLs via DATA.sources or environment variables."
+        )
     return "Polymarket source: native (" + ", ".join(parts) + ")"
+
+
+def _normalized_override(
+    value: str | None,
+    *,
+    env_name: str,
+    suffixes: tuple[str, ...],
+) -> str | None:
+    normalized = env_value(value)
+    if normalized is None or is_disabled(normalized):
+        return None
+    return trim_url_suffix(normalized, suffixes)
+
+
+def _parse_named_source(raw_source: str) -> tuple[str | None, str]:
+    role, separator, value = raw_source.strip().partition("=")
+    if not separator:
+        return None, raw_source
+    normalized_role = role.strip().casefold()
+    env_name = _POLYMARKET_SOURCE_ROLE_ALIASES.get(normalized_role)
+    if env_name is None:
+        return None, raw_source
+    normalized_value = value.strip()
+    if not normalized_value:
+        raise ValueError(f"Polymarket source {raw_source!r} is missing a URL value.")
+    return env_name, normalized_value
+
+
+def _infer_env_name_from_url(url: str) -> str:
+    parsed = urlparse(url)
+    hostname = (parsed.netloc or parsed.path).casefold()
+    normalized_path = parsed.path.rstrip("/")
+    if "gamma-api." in hostname:
+        return POLYMARKET_GAMMA_BASE_URL_ENV
+    if "data-api." in hostname:
+        return POLYMARKET_TRADE_API_BASE_URL_ENV
+    if hostname.startswith("clob.") or ".clob." in hostname:
+        return POLYMARKET_CLOB_BASE_URL_ENV
+    if normalized_path.endswith("/trades"):
+        return POLYMARKET_TRADE_API_BASE_URL_ENV
+    if normalized_path.endswith("/fee-rate"):
+        return POLYMARKET_CLOB_BASE_URL_ENV
+    if normalized_path.endswith("/events"):
+        return POLYMARKET_GAMMA_BASE_URL_ENV
+    if normalized_path.endswith("/markets"):
+        return POLYMARKET_GAMMA_BASE_URL_ENV
+    raise ValueError(
+        "Polymarket native source URLs must either include an explicit role prefix "
+        "like gamma=..., trades=..., clob=... or end with /events, /markets, "
+        "/trades, or /fee-rate."
+    )
+
+
+def _normalized_env_updates(
+    *,
+    gamma_base_url: str | None,
+    clob_base_url: str | None,
+    trade_api_base_url: str | None,
+) -> dict[str, str | None]:
+    return {
+        POLYMARKET_GAMMA_BASE_URL_ENV: (
+            trim_url_suffix(gamma_base_url, _POLYMARKET_GAMMA_SUFFIXES)
+            if gamma_base_url is not None
+            else None
+        ),
+        POLYMARKET_CLOB_BASE_URL_ENV: (
+            trim_url_suffix(clob_base_url, _POLYMARKET_CLOB_SUFFIXES)
+            if clob_base_url is not None
+            else None
+        ),
+        POLYMARKET_TRADE_API_BASE_URL_ENV: (
+            trim_url_suffix(trade_api_base_url, _POLYMARKET_TRADES_SUFFIXES)
+            if trade_api_base_url is not None
+            else None
+        ),
+    }
 
 
 def _resolve_explicit_sources(
     sources: Sequence[str],
 ) -> tuple[PolymarketNativeDataSourceSelection, dict[str, str | None]]:
-    gamma_base_url: str | None = None
-    clob_base_url: str | None = None
-    trade_api_base_url: str | None = None
+    updates = _normalized_env_updates(
+        gamma_base_url=None,
+        clob_base_url=None,
+        trade_api_base_url=None,
+    )
 
     for raw_source in sources:
         if looks_like_local_path(raw_source):
@@ -321,36 +379,25 @@ def _resolve_explicit_sources(
                 f"Received {raw_source!r}.",
             )
 
-        normalized = normalize_urlish(raw_source)
-        lowered = normalized.casefold()
-        if (
-            "gamma" in lowered
-            or lowered.endswith("/events")
-            or lowered.endswith("/markets")
-        ):
-            gamma_base_url = trim_url_suffix(normalized, ("/markets", "/events"))
-            continue
-        if "data-api" in lowered or lowered.endswith("/trades"):
-            trade_api_base_url = trim_url_suffix(normalized, ("/trades",))
-            continue
-        if "clob" in lowered or lowered.endswith("/fee-rate") or "/markets/" in lowered:
-            clob_base_url = trim_url_suffix(normalized, ("/markets", "/fee-rate"))
-            continue
-        gamma_base_url = normalized
+        env_name, candidate = _parse_named_source(raw_source)
+        normalized = normalize_urlish(candidate)
+        resolved_env_name = env_name or _infer_env_name_from_url(normalized)
+        existing = updates.get(resolved_env_name)
+        if existing is not None and existing != normalized:
+            raise ValueError(
+                f"Polymarket native sources received multiple values for {resolved_env_name}."
+            )
+        updates[resolved_env_name] = normalized
 
     return (
         PolymarketNativeDataSourceSelection(
             summary=_summary_from_overrides(
-                gamma_base_url=gamma_base_url,
-                clob_base_url=clob_base_url,
-                trade_api_base_url=trade_api_base_url,
+                gamma_base_url=updates[POLYMARKET_GAMMA_BASE_URL_ENV],
+                clob_base_url=updates[POLYMARKET_CLOB_BASE_URL_ENV],
+                trade_api_base_url=updates[POLYMARKET_TRADE_API_BASE_URL_ENV],
             ),
         ),
-        {
-            POLYMARKET_GAMMA_BASE_URL_ENV: gamma_base_url,
-            POLYMARKET_CLOB_BASE_URL_ENV: clob_base_url,
-            POLYMARKET_TRADE_API_BASE_URL_ENV: trade_api_base_url,
-        },
+        updates,
     )
 
 
@@ -360,9 +407,21 @@ def resolve_polymarket_native_data_source_selection(
     if sources:
         return _resolve_explicit_sources(sources)
 
-    gamma_base_url = RunnerPolymarketDataLoader._configured_gamma_base_url()
-    clob_base_url = RunnerPolymarketDataLoader._configured_clob_base_url()
-    trade_api_base_url = RunnerPolymarketDataLoader._configured_trade_api_base_url()
+    gamma_base_url = _normalized_override(
+        os.getenv(POLYMARKET_GAMMA_BASE_URL_ENV),
+        env_name=POLYMARKET_GAMMA_BASE_URL_ENV,
+        suffixes=_POLYMARKET_GAMMA_SUFFIXES,
+    )
+    clob_base_url = _normalized_override(
+        os.getenv(POLYMARKET_CLOB_BASE_URL_ENV),
+        env_name=POLYMARKET_CLOB_BASE_URL_ENV,
+        suffixes=_POLYMARKET_CLOB_SUFFIXES,
+    )
+    trade_api_base_url = _normalized_override(
+        os.getenv(POLYMARKET_TRADE_API_BASE_URL_ENV),
+        env_name=POLYMARKET_TRADE_API_BASE_URL_ENV,
+        suffixes=_POLYMARKET_TRADES_SUFFIXES,
+    )
     return (
         PolymarketNativeDataSourceSelection(
             summary=_summary_from_overrides(

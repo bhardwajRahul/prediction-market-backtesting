@@ -4,14 +4,19 @@ import asyncio
 from types import SimpleNamespace
 
 from backtests._shared import _prediction_market_runner as runner
+from backtests._shared.data_sources import Native
+from backtests._shared.data_sources import PMXT
 from backtests._shared.data_sources import PMXT_VENDOR
+from backtests._shared.data_sources import Polymarket
+from backtests._shared.data_sources import QuoteTick
+from backtests._shared.data_sources import TradeTick
 
 
 def test_market_data_config_normalizes_values() -> None:
     data = runner.MarketDataConfig(
-        platform=" Polymarket ",
-        data_type=" Quote_Tick ",
-        vendor=PMXT_VENDOR,
+        platform=Polymarket,
+        data_type=QuoteTick,
+        vendor=PMXT,
         sources=(" gamma-api.polymarket.com ", "", " /tmp/data "),
     )
 
@@ -38,9 +43,9 @@ def test_generic_runner_dispatches_polymarket_trade_tick(monkeypatch) -> None:
         runner.run_single_market_backtest(
             name="demo",
             data=runner.MarketDataConfig(
-                platform="polymarket",
-                data_type="trade_tick",
-                vendor="native",
+                platform=Polymarket,
+                data_type=TradeTick,
+                vendor=Native,
                 sources=("gamma-api.polymarket.com",),
             ),
             market_slug="demo-market",
@@ -77,8 +82,8 @@ def test_generic_runner_dispatches_kalshi_trade_tick(monkeypatch) -> None:
             name="demo",
             data=runner.MarketDataConfig(
                 platform="kalshi",
-                data_type="trade_tick",
-                vendor="native",
+                data_type=TradeTick,
+                vendor=Native,
                 sources=("api.elections.kalshi.com/trade-api/v2",),
             ),
             market_ticker="KALSHI-TEST",
@@ -114,9 +119,9 @@ def test_generic_runner_dispatches_pmxt_quote_tick(monkeypatch) -> None:
         runner.run_single_market_backtest(
             name="demo",
             data=runner.MarketDataConfig(
-                platform="polymarket",
-                data_type="quote_tick",
-                vendor="pmxt",
+                platform=Polymarket,
+                data_type=QuoteTick,
+                vendor=PMXT,
                 sources=(
                     "/Volumes/LaCie/pmxt_raws",
                     "mirror.example.com",
@@ -173,8 +178,8 @@ def test_generic_runner_forwards_strategy_configs(monkeypatch) -> None:
         runner.run_single_market_backtest(
             name="demo",
             data=runner.MarketDataConfig(
-                platform="polymarket",
-                data_type="quote_tick",
+                platform=Polymarket,
+                data_type=QuoteTick,
                 vendor=PMXT_VENDOR,
             ),
             market_slug="demo-market",

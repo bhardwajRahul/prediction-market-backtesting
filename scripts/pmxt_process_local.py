@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from pmxt_relay.local_processing import process_local_raw_mirror
+from pmxt_local.local_processing import process_local_raw_mirror
 
 
 def main() -> int:

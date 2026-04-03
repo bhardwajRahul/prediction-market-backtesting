@@ -25,19 +25,13 @@ class RelayWorker:
         *,
         reset_inflight: bool = True,
         reset_mirror_inflight: bool = True,
-        reset_process_inflight: bool = False,
-        reset_prebuild_inflight: bool = False,
-        skip_prebuild: bool = True,
     ) -> None:
-        del skip_prebuild
         self._config = config
         self._config.ensure_directories()
         self._index = RelayIndex(config.db_path, event_retention=config.event_retention)
-        reset_mirror, reset_process, reset_prebuild = self._index.initialize(
+        reset_mirror, _, _ = self._index.initialize(
             reset_inflight=reset_inflight,
             reset_mirror_inflight=reset_mirror_inflight,
-            reset_process_inflight=reset_process_inflight,
-            reset_prebuild_inflight=reset_prebuild_inflight,
         )
         retired = self._index.disable_processing_backlog()
         if retired > 0:
@@ -47,15 +41,13 @@ class RelayWorker:
                 message="Disabled legacy processing backlog for mirror-only relay mode",
                 payload={"retired_hours": retired},
             )
-        if reset_mirror or reset_process or reset_prebuild:
+        if reset_mirror:
             self._record_event(
                 level="WARNING",
                 event_type="resume_inflight",
                 message="Reset inflight relay work after restart",
                 payload={
                     "reset_mirror": reset_mirror,
-                    "reset_process": reset_process,
-                    "reset_prebuild": reset_prebuild,
                 },
             )
 

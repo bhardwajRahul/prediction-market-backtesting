@@ -21,12 +21,3 @@ def parse_archive_hour(filename: str) -> datetime:
 def raw_relative_path(filename: str) -> Path:
     hour = parse_archive_hour(filename)
     return Path(str(hour.year)) / f"{hour.month:02d}" / f"{hour.day:02d}" / filename
-
-
-def processed_relative_path(filename: str) -> Path:
-    return raw_relative_path(filename)
-
-
-def filtered_relative_path(condition_id: str, token_id: str, filename: str) -> Path:
-    parse_archive_hour(filename)
-    return Path(condition_id) / token_id / filename

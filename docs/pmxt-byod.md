@@ -88,35 +88,32 @@ still work for custom integrations:
 
 ### What Works Today
 
-The current PMXT loader can read one market/token/hour from these places:
+The public PMXT runner layer reads one market/token/hour from these places:
 
 1. local filtered cache
-2. local raw PMXT archive hour
-3. relay-hosted filtered parquet, if you point the loader at a relay that still
-   serves filtered hours
-4. raw PMXT archive hour on the configured remote archive
-5. relay-hosted raw PMXT archive hour
+2. each explicit raw source in the order you list it in `DATA.sources`
 
 The current "bring your own data" story is therefore:
 
 - pre-populate the local PMXT filtered cache with PMXT-compatible market-hour
   parquet files
 - or set `DATA.sources` in your runner to `("/path/to/raw-hours", "https://archive.example.com", "https://relay.example.com")`
-- or point `PMXT_LOCAL_ARCHIVE_DIR` at a directory of raw PMXT hour files you
-  already mirrored locally
+- or point `PMXT_LOCAL_ARCHIVE_DIR` / `PMXT_RAW_ROOT` at a directory of raw
+  PMXT hour files you already mirrored locally
 - or use `PMXT_DATA_SOURCE=raw-local` with `PMXT_LOCAL_MIRROR_DIR`
 - or run your own raw mirror and point `PMXT_RELAY_BASE_URL` at it
 
-When the loader falls back to remote raw hours (`r2.pmxt.dev` or relay
-`/v1/raw/...`), it downloads each hour to a temporary local parquet file,
+When the runner falls back to a remote raw source (`r2.pmxt.dev` or a relay
+`/v1/raw/...`), it downloads that hour to a temporary local parquet file,
 filters it locally, and deletes the temp artifact afterward. Persistent raw
 disk growth only happens when you intentionally configure a local raw mirror.
 
 The important distinction is:
 
-- local raw mirrors and remote raw mirrors are current first-class paths
-- filtered relay processing is legacy compatibility, not the preferred shared
-  deployment model
+- local raw mirrors and remote raw mirrors are the current first-class paths
+- the public runner layer does not use relay-hosted filtered parquet
+- filtered relay processing is legacy compatibility in the vendored PMXT loader,
+  not the preferred shared deployment model for this repo
 
 If you want local-only PMXT replays, set both:
 
