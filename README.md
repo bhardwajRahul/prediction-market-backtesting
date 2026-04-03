@@ -22,16 +22,6 @@ Backtesting framework for prediction market strategies on
 top of [NautilusTrader](https://github.com/nautechsystems/nautilus_trader) with
 custom exchange adapters. Plotting inspired by [minitrade](https://github.com/dodid/minitrade). This repo is still in active development, and **a full release should happen within the next one to two months.**
 
-Vendor-backed historical data is now documented as a local-first workflow:
-mirror raw archive hours onto local disk, process them locally, and keep any
-shared server focused on raw mirroring only. PMXT is the first fully documented
-vendor path, and the archived full-stack relay lives under
-`archive/pmxt_relay_legacy/`.
-
-Public runner files are flat experiment specs built around `DATA`, `SIMS`,
-`STRATEGY_CONFIGS`, and a `PredictionMarketBacktest` object with a `.run()`
-entrypoint.
-
 Fantastic single & multi-market charting. Featuring: equity (total & individual markets), profit / loss ticks, P&L periodic bars, market allocation, YES price (with green buy and red sell fills), drawdown, sharpe (with above/below shading), cash / equity, monthly returns, and cumulative brier advantage.
 ![Charting preview](https://raw.githubusercontent.com/evan-kolberg/prediction-market-backtesting/main/docs/assets/charting-preview.jpeg)
 [```/nautilus_pm/nautilus_trader/analysis/legacy_backtesting/plotting.py```](https://github.com/evan-kolberg/prediction-market-backtesting/blob/main/nautilus_pm/nautilus_trader/analysis/legacy_backtesting/plotting.py)

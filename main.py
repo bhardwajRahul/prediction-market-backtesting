@@ -29,7 +29,6 @@ BACKTESTS_ROOT = PROJECT_ROOT / "backtests"
 
 DIM = "\033[2m"
 BOLD = "\033[1m"
-CYAN = "\033[36m"
 RESET = "\033[0m"
 ENABLE_TIMING_ENV = "BACKTEST_ENABLE_TIMING"
 
@@ -135,7 +134,7 @@ def _render_menu_tree(
         index, filename = payload
         description = child["description"]
         desc = f" {DIM}— {description}{RESET}" if description else ""
-        lines.append(f"{prefix}{connector}{CYAN}{index}{RESET}. {filename}{desc}")
+        lines.append(f"{prefix}{connector}{index}. {filename}{desc}")
 
     return lines
 
