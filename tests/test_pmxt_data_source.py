@@ -189,6 +189,54 @@ def test_runner_loader_reads_market_rows_from_local_raw_mirror(tmp_path):
     ]
 
 
+def test_runner_loader_emits_scan_progress_for_local_raw_mirror(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    loader = _make_loader(raw_root=tmp_path)
+    loader._pmxt_scan_progress_callback = object()
+    hour = pd.Timestamp("2026-03-21T12:00:00Z")
+    raw_path = (
+        tmp_path / "2026" / "03" / "21" / "polymarket_orderbook_2026-03-21T12.parquet"
+    )
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_bytes(b"pmxt")
+    captured: dict[str, object] = {}
+
+    def fake_dataset(path: str, *, format: str):
+        captured["dataset_path"] = path
+        captured["dataset_format"] = format
+        return object()
+
+    def fake_scan(
+        dataset,
+        *,
+        batch_size: int,
+        source: str,
+        total_bytes: int | None,
+    ):
+        captured["dataset"] = dataset
+        captured["batch_size"] = batch_size
+        captured["source"] = source
+        captured["total_bytes"] = total_bytes
+        return ["batch"]
+
+    monkeypatch.setattr(pmxt_module.ds, "dataset", fake_dataset)
+    monkeypatch.setattr(loader, "_scan_raw_market_batches", fake_scan)
+
+    batches = loader._load_local_archive_market_batches(hour, batch_size=1_000)
+
+    assert batches == ["batch"]
+    assert captured == {
+        "dataset_path": str(raw_path),
+        "dataset_format": "parquet",
+        "dataset": captured["dataset"],
+        "batch_size": 1_000,
+        "source": str(raw_path),
+        "total_bytes": 4,
+    }
+
+
 def test_runner_loader_never_uses_filtered_relay_path() -> None:
     loader = _make_loader()
     hour = pd.Timestamp("2026-03-21T12:00:00Z")
@@ -235,6 +283,7 @@ def test_runner_loader_uses_user_agent_for_remote_downloads(
     loader = _make_loader()
     payload = b"pmxt-test-payload"
     captured_request: Request | None = None
+    captured_timeout: float | None = None
 
     class FakeResponse:
         def __init__(self, body: bytes) -> None:
@@ -259,9 +308,11 @@ def test_runner_loader_uses_user_agent_for_remote_downloads(
         def __exit__(self, exc_type, exc, tb) -> None:
             return None
 
-    def fake_urlopen(request):
+    def fake_urlopen(request, timeout=None):
         nonlocal captured_request
+        nonlocal captured_timeout
         captured_request = request
+        captured_timeout = timeout
         return FakeResponse(payload)
 
     monkeypatch.setattr(pmxt_module, "urlopen", fake_urlopen)
@@ -278,3 +329,56 @@ def test_runner_loader_uses_user_agent_for_remote_downloads(
     assert dict(captured_request.header_items())["User-agent"] == (
         "prediction-market-backtesting/1.0"
     )
+    assert captured_timeout == 30
+
+
+def test_runner_loader_uses_timeout_for_remote_payload_and_head(monkeypatch) -> None:
+    loader = _make_loader()
+    payload = b"pmxt-test-payload"
+    requests: list[tuple[Request, float | None]] = []
+
+    class FakeResponse:
+        def __init__(self, body: bytes) -> None:
+            self._body = body
+            self._offset = 0
+            self.headers = {"Content-Length": str(len(body))}
+
+        def read(self, size: int = -1) -> bytes:
+            if self._offset >= len(self._body):
+                return b""
+            if size < 0:
+                chunk = self._body[self._offset :]
+                self._offset = len(self._body)
+                return chunk
+            chunk = self._body[self._offset : self._offset + size]
+            self._offset += len(chunk)
+            return chunk
+
+        def __enter__(self) -> FakeResponse:
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    def fake_urlopen(request, timeout=None):
+        requests.append((request, timeout))
+        return FakeResponse(payload)
+
+    monkeypatch.setattr(pmxt_module, "urlopen", fake_urlopen)
+    loader._pmxt_scan_progress_callback = object()
+
+    assert (
+        loader._download_payload_with_progress(
+            "https://r2.pmxt.dev/polymarket_orderbook_2026-02-22T12.parquet"
+        )
+        == payload
+    )
+    assert loader._progress_total_bytes(
+        "https://r2.pmxt.dev/polymarket_orderbook_2026-02-22T12.parquet"
+    ) == len(payload)
+
+    assert len(requests) == 2
+    assert requests[0][0].get_method() == "GET"
+    assert requests[1][0].get_method() == "HEAD"
+    assert requests[0][1] == 30
+    assert requests[1][1] == 30

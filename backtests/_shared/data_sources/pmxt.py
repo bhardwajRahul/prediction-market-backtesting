@@ -32,6 +32,7 @@ PMXT_REMOTE_BASE_URL_ENV = "PMXT_REMOTE_BASE_URL"
 PMXT_CACHE_DIR_ENV = "PMXT_CACHE_DIR"
 PMXT_SOURCE_PRIORITY_ENV = "PMXT_SOURCE_PRIORITY"
 _PMXT_RUNNER_HTTP_USER_AGENT = "prediction-market-backtesting/1.0"
+_PMXT_RUNNER_HTTP_TIMEOUT_SECS = 30
 
 _PMXT_SOURCE_STAGE_RAW_LOCAL = "raw-local"
 _PMXT_SOURCE_STAGE_RAW_REMOTE = "raw-remote"
@@ -140,17 +141,12 @@ class RunnerPolymarketPMXTDataLoader(PolymarketPMXTDataLoader):
             return None
 
         dataset = ds.dataset(str(raw_path), format="parquet")
-        scanner = dataset.scanner(
-            columns=self._PMXT_REMOTE_COLUMNS,
-            filter=self._market_filter(),
+        return self._scan_raw_market_batches(
+            dataset,
             batch_size=batch_size,
+            source=str(raw_path),
+            total_bytes=self._progress_total_bytes(str(raw_path)),
         )
-        batches = []
-        for batch in scanner.to_batches():
-            filtered_batch = self._filter_batch_to_token(batch)
-            if filtered_batch.num_rows:
-                batches.append(filtered_batch)
-        return batches
 
     def _load_local_archive_market_batches(
         self,
@@ -322,7 +318,13 @@ class RunnerPolymarketPMXTDataLoader(PolymarketPMXTDataLoader):
     ) -> int | None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         request = Request(url, headers={"User-Agent": _PMXT_RUNNER_HTTP_USER_AGENT})
-        with urlopen(request) as response, destination.open("wb") as handle:  # noqa: S310
+        with (
+            urlopen(
+                request,
+                timeout=_PMXT_RUNNER_HTTP_TIMEOUT_SECS,
+            ) as response,
+            destination.open("wb") as handle,
+        ):  # noqa: S310
             total_bytes = self._content_length_from_response(response)
             downloaded_bytes = 0
             last_emit = 0.0
@@ -377,7 +379,10 @@ class RunnerPolymarketPMXTDataLoader(PolymarketPMXTDataLoader):
 
     def _download_payload_with_progress(self, url: str) -> bytes | None:
         request = Request(url, headers={"User-Agent": _PMXT_RUNNER_HTTP_USER_AGENT})
-        with urlopen(request) as response:  # noqa: S310
+        with urlopen(
+            request,
+            timeout=_PMXT_RUNNER_HTTP_TIMEOUT_SECS,
+        ) as response:  # noqa: S310
             total_bytes = self._content_length_from_response(response)
             downloaded_bytes = 0
             last_emit = 0.0
@@ -420,6 +425,41 @@ class RunnerPolymarketPMXTDataLoader(PolymarketPMXTDataLoader):
                 finished=True,
             )
             return b"".join(chunks)
+
+    def _progress_total_bytes(self, source: str) -> int | None:  # type: ignore[override]
+        if getattr(self, "_pmxt_scan_progress_callback", None) is None:
+            return None
+
+        cache = getattr(self, "_pmxt_progress_size_cache", None)
+        if cache is None:
+            cache = {}
+            self._pmxt_progress_size_cache = cache
+        if source in cache:
+            return cache[source]
+
+        total_bytes: int | None = None
+        if "://" in source:
+            request = Request(
+                source,
+                method="HEAD",
+                headers={"User-Agent": _PMXT_RUNNER_HTTP_USER_AGENT},
+            )
+            try:
+                with urlopen(
+                    request,
+                    timeout=_PMXT_RUNNER_HTTP_TIMEOUT_SECS,
+                ) as response:  # noqa: S310
+                    total_bytes = self._content_length_from_response(response)
+            except Exception:
+                total_bytes = None
+        else:
+            try:
+                total_bytes = Path(source).expanduser().stat().st_size
+            except OSError:
+                total_bytes = None
+
+        cache[source] = total_bytes
+        return total_bytes
 
 
 @dataclass(frozen=True)
