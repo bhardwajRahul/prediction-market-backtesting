@@ -115,72 +115,14 @@ def _runner_stem(backtest: dict[str, Any]) -> str:
     return Path(_relative_parts(backtest)[-1]).stem
 
 
-def _runner_family(backtest: dict[str, Any]) -> str:
-    relative_parts = _relative_parts(backtest)
-    if relative_parts and relative_parts[0] == "private":
-        return "Private"
-
-    stem = _runner_stem(backtest)
-    if stem.startswith("kalshi_"):
-        return "Kalshi native"
-    if "_pmxt_" in stem:
-        return "Polymarket PMXT"
-    if stem.startswith("polymarket_"):
-        return "Polymarket native"
-    return "Misc"
-
-
-def _pretty_strategy_token(token: str) -> str:
-    special = {
-        "api": "API",
-        "clob": "CLOB",
-        "ema": "EMA",
-        "pmxt": "PMXT",
-        "rsi": "RSI",
-        "vwap": "VWAP",
-    }
-    lowered = token.lower()
-    if lowered in special:
-        return special[lowered]
-    return lowered.capitalize()
-
-
-def _runner_title(backtest: dict[str, Any]) -> str:
-    stem = _runner_stem(backtest)
-    prefixes = (
-        "kalshi_trade_tick_",
-        "polymarket_quote_tick_pmxt_",
-        "polymarket_quote_tick_",
-        "polymarket_trade_tick_",
-    )
-    for prefix in prefixes:
-        if stem.startswith(prefix):
-            stem = stem[len(prefix) :]
-            break
-
-    return " ".join(_pretty_strategy_token(token) for token in stem.split("_"))
-
-
-def _menu_sort_key(backtest: dict[str, Any]) -> tuple[int, str, str]:
-    family_order = {
-        "Kalshi native": 0,
-        "Polymarket native": 1,
-        "Polymarket PMXT": 2,
-        "Private": 3,
-        "Misc": 4,
-    }
-    family = _runner_family(backtest)
-    return (
-        family_order.get(family, 99),
-        _runner_title(backtest).casefold(),
-        _relative_runner_path(backtest).as_posix(),
-    )
+def _menu_label(backtest: dict[str, Any]) -> str:
+    return _relative_runner_path(backtest).as_posix()
 
 
 def _shortcut_candidates(backtest: dict[str, Any]) -> list[str]:
     words = re.findall(
         r"[A-Za-z]+",
-        f"{_runner_family(backtest)} {_runner_title(backtest)} {_runner_stem(backtest)}",
+        f"{backtest.get('name', '')} {_runner_stem(backtest)} {_menu_label(backtest)}",
     )
     candidates: list[str] = []
     seen: set[str] = set()
@@ -313,26 +255,27 @@ def _show_basic_menu(backtests: list[dict[str, Any]]) -> int:
 
 
 def _show_terminal_menu(backtests: list[dict[str, Any]]) -> int:
-    sorted_backtests = sorted(backtests, key=_menu_sort_key)
-    shortcuts = _assign_shortcuts(sorted_backtests)
-    family_width = max(len(_runner_family(backtest)) for backtest in sorted_backtests)
+    shortcuts = _assign_shortcuts(backtests)
 
     preview_lookup: dict[str, str] = {}
+    status_lookup: dict[str, str] = {}
     menu_entries: list[str] = []
-    for backtest in sorted_backtests:
+    for backtest in backtests:
         relative_key = _relative_runner_path(backtest).as_posix()
         shortcut = shortcuts[relative_key]
         preview_lookup[relative_key] = _runner_preview(backtest)
-        menu_entries.append(
-            f"[{shortcut}] {_runner_family(backtest):<{family_width}}  {_runner_title(backtest)}|{relative_key}"
+        status_lookup[relative_key] = (
+            backtest.get("description")
+            or "No description provided. Preview shows the pinned runner spec."
         )
+        menu_entries.append(f"[{shortcut}] {_menu_label(backtest)}|{relative_key}")
 
     terminal_menu = TerminalMenu(
         menu_entries,
         title=(
             MENU_TITLE,
             "letters run immediately, enter runs selection, / searches, q exits",
-            f"{len(sorted_backtests)} runnable entries | preview shows the flat experiment spec",
+            f"{len(backtests)} runnable entries | preview shows the flat runner spec",
         ),
         menu_cursor="> ",
         menu_cursor_style=("fg_cyan", "bold"),
@@ -345,8 +288,10 @@ def _show_terminal_menu(backtests: list[dict[str, Any]]) -> int:
         search_case_sensitive=False,
         show_search_hint=True,
         show_shortcut_hints=False,
-        status_bar=(
-            "keep public runners honest | BACKTEST_ENABLE_TIMING=0 disables timing output"
+        status_bar=lambda preview_key: (
+            f"{preview_key}\n"
+            f"{status_lookup.get(preview_key, '')}\n"
+            "BACKTEST_ENABLE_TIMING=0 disables timing output"
         ),
         status_bar_style=("fg_yellow", "bg_black"),
         status_bar_below_preview=True,
