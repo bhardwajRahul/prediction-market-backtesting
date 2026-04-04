@@ -229,6 +229,7 @@ def run_market_backtest(
     liquidity_consumption: bool = False,
     queue_position: bool = False,
     latency_model: Any | None = None,
+    nautilus_log_level: str = "WARNING",
     requested_start_ns: int | None = None,
     requested_end_ns: int | None = None,
 ) -> dict[str, Any]:
@@ -239,7 +240,7 @@ def run_market_backtest(
     engine = BacktestEngine(
         config=BacktestEngineConfig(
             trader_id=TraderId("BACKTESTER-001"),
-            logging=LoggingConfig(log_level="WARNING"),
+            logging=LoggingConfig(log_level=nautilus_log_level),
             risk_engine=RiskEngineConfig(),
         ),
     )

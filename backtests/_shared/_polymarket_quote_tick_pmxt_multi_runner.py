@@ -44,6 +44,7 @@ async def run_multi_sim_pmxt_backtest_async(
             end_time=sim.end_time,
             data_sources=backtest.data.sources,
             execution=backtest.execution,
+            nautilus_log_level=backtest.nautilus_log_level,
         )
         if result is None:
             continue
