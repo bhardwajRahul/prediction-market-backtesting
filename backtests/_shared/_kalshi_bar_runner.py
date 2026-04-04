@@ -163,6 +163,8 @@ async def run_single_market_bar_backtest(
         market_key="ticker",
         emit_html=emit_html,
         return_chart_layout=return_chart_layout,
+        requested_start_ns=int(start.value),
+        requested_end_ns=int(end.value),
     )
 
     if emit_summary:

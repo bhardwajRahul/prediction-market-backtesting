@@ -77,32 +77,54 @@ def _data_window_ns(data: Sequence[object]) -> tuple[int | None, int | None]:
     return start_ns, end_ns
 
 
+def _coverage_ratio_for_window(
+    *,
+    start_ns: int | None,
+    end_ns: int | None,
+    simulated_through_ns: int | None,
+) -> float | None:
+    if start_ns is None or end_ns is None:
+        return None
+    if end_ns <= start_ns:
+        return 1.0 if simulated_through_ns is not None else 0.0
+    if simulated_through_ns is None:
+        return None
+
+    clamped_end_ns = min(max(simulated_through_ns, start_ns), end_ns)
+    return (clamped_end_ns - start_ns) / (end_ns - start_ns)
+
+
 def build_backtest_run_state(
     *,
     data: Sequence[object],
     backtest_end_ns: int | None,
     forced_stop: bool,
+    requested_start_ns: int | None = None,
+    requested_end_ns: int | None = None,
 ) -> dict[str, Any]:
-    planned_start_ns, planned_end_ns = _data_window_ns(data)
+    loaded_start_ns, loaded_end_ns = _data_window_ns(data)
+    planned_start_ns = (
+        loaded_start_ns if requested_start_ns is None else requested_start_ns
+    )
+    planned_end_ns = loaded_end_ns if requested_end_ns is None else requested_end_ns
     simulated_through_ns = backtest_end_ns
     if simulated_through_ns is None and forced_stop:
         simulated_through_ns = planned_start_ns
 
-    coverage_ratio: float | None = None
-    if planned_start_ns is not None and planned_end_ns is not None:
-        if planned_end_ns <= planned_start_ns:
-            coverage_ratio = 1.0 if simulated_through_ns is not None else 0.0
-        elif simulated_through_ns is not None:
-            clamped_end_ns = min(
-                max(simulated_through_ns, planned_start_ns), planned_end_ns
-            )
-            coverage_ratio = (clamped_end_ns - planned_start_ns) / (
-                planned_end_ns - planned_start_ns
-            )
+    requested_coverage_ratio = _coverage_ratio_for_window(
+        start_ns=planned_start_ns,
+        end_ns=planned_end_ns,
+        simulated_through_ns=simulated_through_ns,
+    )
+    loaded_coverage_ratio = _coverage_ratio_for_window(
+        start_ns=loaded_start_ns,
+        end_ns=loaded_end_ns,
+        simulated_through_ns=simulated_through_ns,
+    )
 
     terminated_by_window = False
-    if planned_end_ns is not None and simulated_through_ns is not None:
-        terminated_by_window = simulated_through_ns < planned_end_ns
+    if loaded_end_ns is not None and simulated_through_ns is not None:
+        terminated_by_window = simulated_through_ns < loaded_end_ns
 
     terminated_early = bool(forced_stop or terminated_by_window)
     stop_reason: str | None = None
@@ -116,8 +138,11 @@ def build_backtest_run_state(
         "stop_reason": stop_reason,
         "planned_start": _iso_from_nanos(planned_start_ns),
         "planned_end": _iso_from_nanos(planned_end_ns),
+        "loaded_start": _iso_from_nanos(loaded_start_ns),
+        "loaded_end": _iso_from_nanos(loaded_end_ns),
         "simulated_through": _iso_from_nanos(simulated_through_ns),
-        "coverage_ratio": coverage_ratio,
+        "coverage_ratio": loaded_coverage_ratio,
+        "requested_coverage_ratio": requested_coverage_ratio,
     }
 
 
@@ -145,11 +170,19 @@ def print_backtest_result_warnings(
         stop_reason = str(result.get("stop_reason") or "unknown")
         simulated_through = str(result.get("simulated_through") or "unknown")
         coverage_ratio = result.get("coverage_ratio")
-        coverage_text = "unknown coverage"
+        requested_coverage_ratio = result.get("requested_coverage_ratio")
+        coverage_parts: list[str] = []
         if isinstance(coverage_ratio, int | float):
-            coverage_text = (
-                f"{float(coverage_ratio) * 100.0:.1f}% of the simulated window"
+            coverage_parts.append(
+                f"{float(coverage_ratio) * 100.0:.1f}% of the loaded-data window"
             )
+        if isinstance(requested_coverage_ratio, int | float):
+            coverage_parts.append(
+                f"{float(requested_coverage_ratio) * 100.0:.1f}% of the requested window"
+            )
+        coverage_text = (
+            ", ".join(coverage_parts) if coverage_parts else "unknown coverage"
+        )
         if stop_reason == "account_error":
             warning_lines.append(
                 f"WARNING: {market_label} terminated early after an engine AccountError "
@@ -196,6 +229,8 @@ def run_market_backtest(
     liquidity_consumption: bool = False,
     queue_position: bool = False,
     latency_model: Any | None = None,
+    requested_start_ns: int | None = None,
+    requested_end_ns: int | None = None,
 ) -> dict[str, Any]:
     if fill_model is None and apply_default_fill_model:
         fill_model = PredictionMarketTakerFillModel()
@@ -233,6 +268,8 @@ def run_market_backtest(
             data=data_records,
             backtest_end_ns=run_result.backtest_end,
             forced_stop=forced_stop,
+            requested_start_ns=requested_start_ns,
+            requested_end_ns=requested_end_ns,
         )
 
         fills = engine.trader.generate_order_fills_report()

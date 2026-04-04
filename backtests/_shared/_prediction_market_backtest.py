@@ -122,6 +122,8 @@ class _LoadedMarketSim:
     realized_outcome: float | None
     prices: list[float]
     metadata: Mapping[str, Any]
+    requested_start_ns: int | None
+    requested_end_ns: int | None
 
 
 class PredictionMarketBacktest:
@@ -213,6 +215,8 @@ class PredictionMarketBacktest:
                         data=loaded_sim.records,
                         backtest_end_ns=engine_result.backtest_end,
                         forced_stop=forced_stop,
+                        requested_start_ns=loaded_sim.requested_start_ns,
+                        requested_end_ns=loaded_sim.requested_end_ns,
                     ),
                 )
                 for loaded_sim in loaded_sims
@@ -343,6 +347,8 @@ class PredictionMarketBacktest:
             realized_outcome=infer_realized_outcome(loader.instrument),
             prices=prices,
             metadata=metadata,
+            requested_start_ns=int(start.value),
+            requested_end_ns=int(end.value),
         )
 
     async def _load_polymarket_pmxt_quote_tick_sim(
@@ -433,6 +439,8 @@ class PredictionMarketBacktest:
             realized_outcome=infer_realized_outcome(loader.instrument),
             prices=prices,
             metadata=metadata,
+            requested_start_ns=int(start.value),
+            requested_end_ns=int(end.value),
         )
 
     async def _load_kalshi_trade_tick_sim(
@@ -496,6 +504,8 @@ class PredictionMarketBacktest:
             realized_outcome=infer_realized_outcome(loader.instrument),
             prices=prices,
             metadata=metadata,
+            requested_start_ns=int(start.value),
+            requested_end_ns=int(end.value),
         )
 
     def _build_engine(self) -> BacktestEngine:
