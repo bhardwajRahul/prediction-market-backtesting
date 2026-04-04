@@ -43,7 +43,7 @@ notices with file-specific change dates:
 - `backtests/polymarket_quote_tick_pmxt_late_favorite_limit_hold.py`
 - `backtests/polymarket_quote_tick_pmxt_panic_fade.py`
 - `backtests/polymarket_quote_tick_pmxt_rsi_reversion.py`
-- `backtests/polymarket_quote_tick_pmxt_sports_vwap_reversion.py`
+- `backtests/polymarket_quote_tick_pmxt_multi_sim_runner.py`
 - `backtests/polymarket_quote_tick_pmxt_spread_capture.py`
 - `backtests/polymarket_quote_tick_pmxt_threshold_momentum.py`
 - `backtests/polymarket_quote_tick_pmxt_vwap_reversion.py`

@@ -21,7 +21,7 @@ PUBLIC_RUNNER_PATHS = sorted(
 PMXT_SINGLE_MARKET_QUOTE_TICK_RUNNERS = sorted(
     path.relative_to(REPO_ROOT)
     for path in BACKTESTS_ROOT.glob("polymarket_quote_tick_pmxt_*.py")
-    if "sports_" not in path.name
+    if "sports_" not in path.name and "multi_sim_runner" not in path.name
 )
 
 

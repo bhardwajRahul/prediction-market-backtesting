@@ -255,7 +255,7 @@ def test_pmxt_multi_sim_example_runner_uses_fixed_windows(
     monkeypatch: pytest.MonkeyPatch,
 ):
     module = importlib.import_module(
-        "backtests.polymarket_quote_tick_pmxt_sports_vwap_reversion"
+        "backtests.polymarket_quote_tick_pmxt_multi_sim_runner"
     )
     captured: dict[str, object] = {}
 

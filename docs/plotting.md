@@ -19,8 +19,8 @@ Charts are written to `output/`, typically with names like:
 - `output/polymarket_quote_tick_pmxt_breakout_<market>_legacy.html`
 - `output/polymarket_quote_tick_pmxt_rsi_reversion_<market>_legacy.html`
 - `output/polymarket_quote_tick_pmxt_spread_capture_<market>_legacy.html`
-- `output/polymarket_quote_tick_pmxt_sports_vwap_reversion_combined_legacy.html`
-- `output/polymarket_quote_tick_pmxt_sports_vwap_reversion_multi_market.html`
+- `output/polymarket_quote_tick_pmxt_multi_sim_runner_combined_legacy.html`
+- `output/polymarket_quote_tick_pmxt_multi_sim_runner_multi_market.html`
 
 ## Multi-Market References
 
