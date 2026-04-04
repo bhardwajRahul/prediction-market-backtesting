@@ -18,7 +18,7 @@
 ![GitHub open issues](https://img.shields.io/github/issues/evan-kolberg/prediction-market-backtesting)
 
 [![Relay Status](https://209-209-10-83.sslip.io/v1/badge/status.svg)](https://209-209-10-83.sslip.io/v1/stats)
-[![PMXT Upstream](https://209-209-10-83.sslip.io/v1/badge/upstream.svg)](https://209-209-10-83.sslip.io/v1/queue)
+[![r2.pmxt.dev](https://209-209-10-83.sslip.io/v1/badge/upstream.svg)](https://209-209-10-83.sslip.io/v1/queue)
 [![CPU Load](https://209-209-10-83.sslip.io/v1/badge/cpu.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![I/O Wait](https://209-209-10-83.sslip.io/v1/badge/iowait.svg)](https://209-209-10-83.sslip.io/v1/system)
 [![RAM](https://209-209-10-83.sslip.io/v1/badge/mem.svg)](https://209-209-10-83.sslip.io/v1/system)
@@ -35,8 +35,8 @@ custom exchange adapters. Plotting inspired by [minitrade](https://github.com/do
 The public strategies in this repo are textbook research examples and runner
 templates, not claims of durable live edge. Repo-owned backtests now surface
 early-stop metadata when a run does not complete its full simulated window.
-The relay badges separate relay health from PMXT upstream availability so an
-upstream outage does not masquerade as a relay failure.
+The relay badges separate relay health from `r2.pmxt.dev` availability so an
+`r2.pmxt.dev` outage does not masquerade as a relay failure.
 
 Fantastic single & multi-market charting. Featuring: equity (total & individual markets), profit / loss ticks, P&L periodic bars, market allocation, YES price (with green buy and red sell fills), drawdown, sharpe (with above/below shading), cash / equity, monthly returns, and cumulative brier advantage.
 ![Charting preview](https://raw.githubusercontent.com/evan-kolberg/prediction-market-backtesting/main/docs/assets/charting-preview.jpeg)

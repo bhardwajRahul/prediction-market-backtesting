@@ -375,6 +375,7 @@ def test_upstream_badge_uses_errors_for_fresh_unresolved_failures(tmp_path: Path
         now=now,
     )
 
+    assert payload["label"] == "r2.pmxt.dev"
     assert payload["message"] == "errors"
     assert payload["color"] == "red"
 
@@ -398,6 +399,7 @@ def test_upstream_badge_uses_lagging_for_backlog_with_old_latest_mirror(tmp_path
         now=now,
     )
 
+    assert payload["label"] == "r2.pmxt.dev"
     assert payload["message"] == "lagging"
     assert payload["color"] == "orange"
 

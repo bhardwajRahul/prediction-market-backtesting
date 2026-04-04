@@ -109,12 +109,12 @@ Active mirror-focused endpoints:
 state. Filtered-hour and processing-oriented HTTP endpoints are intentionally
 not part of the active relay path.
 
-The public badges separate relay health from upstream PMXT availability:
+The public badges separate relay health from `r2.pmxt.dev` availability:
 
 - `/v1/badge/status(.svg)` reports whether the relay itself is up, recent, and
   has active API/worker services.
-- `/v1/badge/upstream(.svg)` reports whether the upstream PMXT raw mirror is
-  healthy, lagging, or erroring.
+- `/v1/badge/upstream(.svg)` reports whether `r2.pmxt.dev` is healthy,
+  lagging, or erroring.
 
 ## Legacy Archive
 

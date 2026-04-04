@@ -464,30 +464,30 @@ def _upstream_badge_payload(
     outstanding = mirror_pending + mirror_processing + mirror_error
 
     if last_event_at is None:
-        return _badge_payload(label="PMXT upstream", message="starting", color="yellow")
+        return _badge_payload(label="r2.pmxt.dev", message="starting", color="yellow")
 
     age_seconds = max(0.0, (current - last_event_at).total_seconds())
     stale_threshold = max(config.poll_interval_secs * 4, 3600)
     if age_seconds > stale_threshold:
-        return _badge_payload(label="PMXT upstream", message="stale", color="red")
+        return _badge_payload(label="r2.pmxt.dev", message="stale", color="red")
     if mirror_error > 0:
         if last_error_at is not None:
             error_age_seconds = max(0.0, (current - last_error_at).total_seconds())
             if error_age_seconds <= max(config.poll_interval_secs * 2, 900):
                 return _badge_payload(
-                    label="PMXT upstream", message="errors", color="red"
+                    label="r2.pmxt.dev", message="errors", color="red"
                 )
-        return _badge_payload(label="PMXT upstream", message="degraded", color="orange")
+        return _badge_payload(label="r2.pmxt.dev", message="degraded", color="orange")
     if outstanding > 0 and latest_mirrored_hour is not None:
         lag_seconds = max(0.0, (current - latest_mirrored_hour).total_seconds())
         lag_threshold = max(config.poll_interval_secs * 8, 21600)
         if lag_seconds > lag_threshold:
             return _badge_payload(
-                label="PMXT upstream", message="lagging", color="orange"
+                label="r2.pmxt.dev", message="lagging", color="orange"
             )
     if outstanding > 0:
-        return _badge_payload(label="PMXT upstream", message="syncing", color="yellow")
-    return _badge_payload(label="PMXT upstream", message="up", color="brightgreen")
+        return _badge_payload(label="r2.pmxt.dev", message="syncing", color="yellow")
+    return _badge_payload(label="r2.pmxt.dev", message="up", color="brightgreen")
 
 
 def _ratio_badge_payload(
