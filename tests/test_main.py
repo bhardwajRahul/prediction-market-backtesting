@@ -97,6 +97,59 @@ def test_show_menu_renders_folder_tree(capsys, monkeypatch):
     assert "└── 3. polymarket_quote_tick_pmxt_breakout.py — PMXT breakout" in rendered
 
 
+def test_assign_shortcuts_prefers_unique_letters_and_avoids_quit_key():
+    backtests = [
+        {
+            "name": "kalshi_trade_tick_breakout",
+            "description": "Kalshi breakout",
+            "relative_parts": ("kalshi_trade_tick_breakout.py",),
+            "run": object(),
+        },
+        {
+            "name": "polymarket_trade_tick_vwap_reversion",
+            "description": "Polymarket VWAP",
+            "relative_parts": ("polymarket_trade_tick_vwap_reversion.py",),
+            "run": object(),
+        },
+        {
+            "name": "polymarket_quote_tick_pmxt_ema_crossover",
+            "description": "PMXT EMA",
+            "relative_parts": ("polymarket_quote_tick_pmxt_ema_crossover.py",),
+            "run": object(),
+        },
+    ]
+
+    shortcuts = main_module._assign_shortcuts(backtests)
+
+    assert len(set(shortcuts.values())) == len(backtests)
+    assert all(len(value) == 1 and value.isalpha() for value in shortcuts.values())
+    assert "q" not in shortcuts.values()
+    assert "Q" not in shortcuts.values()
+
+
+def test_runner_preview_includes_command_and_spec(tmp_path: Path, monkeypatch):
+    runner_path = tmp_path / "backtests" / "demo_runner.py"
+    runner_path.parent.mkdir(parents=True)
+    runner_path.write_text(
+        'NAME = "demo_runner"\nDESCRIPTION = "Demo runner"\nDATA = object()\n',
+        encoding="utf-8",
+    )
+
+    backtest = {
+        "name": "demo_runner",
+        "description": "Demo runner",
+        "relative_parts": ("demo_runner.py",),
+        "run": object(),
+    }
+    monkeypatch.setattr(main_module, "PROJECT_ROOT", tmp_path)
+
+    preview = main_module._runner_preview(backtest)
+
+    assert "backtests/demo_runner.py" in preview
+    assert "uv run python backtests/demo_runner.py" in preview
+    assert 'NAME = "demo_runner"' in preview
+
+
 def test_discoverable_backtest_paths_stay_flat(tmp_path: Path) -> None:
     backtests_root = tmp_path / "backtests"
     (backtests_root / "_shared").mkdir(parents=True)

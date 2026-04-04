@@ -190,6 +190,10 @@ Interactive menu:
 make backtest
 ```
 
+The menu uses `simple-term-menu`, so you can launch runners with single-letter
+shortcuts, search with `/`, and inspect the selected runner's flat experiment
+spec in the preview pane before you run it.
+
 Equivalent direct command:
 
 ```bash

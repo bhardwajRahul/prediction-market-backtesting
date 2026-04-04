@@ -6,7 +6,7 @@ backtest:
 	uv run python main.py
 
 install:
-	unset CONDA_PREFIX && uv venv --python 3.13 && uv pip install -e nautilus_pm/ bokeh plotly numpy py-clob-client duckdb
+	unset CONDA_PREFIX && uv venv --python 3.13 && uv pip install -e nautilus_pm/ bokeh plotly numpy py-clob-client duckdb simple-term-menu
 
 check:
 	uv run ruff check --exclude nautilus_pm .

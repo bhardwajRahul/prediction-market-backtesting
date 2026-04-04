@@ -19,10 +19,19 @@ import asyncio
 import importlib
 import inspect
 import os
+import re
+import subprocess
 import sys
 import time
 from pathlib import Path
+from string import ascii_lowercase
+from string import ascii_uppercase
 from typing import Any
+
+try:
+    from simple_term_menu import TerminalMenu
+except ImportError:  # pragma: no cover - fallback is covered through non-TTY tests
+    TerminalMenu = None
 
 PROJECT_ROOT = Path(__file__).parent
 BACKTESTS_ROOT = PROJECT_ROOT / "backtests"
@@ -31,6 +40,8 @@ DIM = "\033[2m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 ENABLE_TIMING_ENV = "BACKTEST_ENABLE_TIMING"
+SHORTCUT_LETTERS = ascii_lowercase.replace("q", "") + ascii_uppercase.replace("Q", "")
+MENU_TITLE = "Prediction Market Backtests"
 
 
 def _env_flag_enabled(name: str) -> bool:
@@ -96,6 +107,262 @@ def _relative_parts(backtest: dict[str, Any]) -> tuple[str, ...]:
     return (f"{backtest['name']}.py",)
 
 
+def _relative_runner_path(backtest: dict[str, Any]) -> Path:
+    return Path("backtests", *_relative_parts(backtest))
+
+
+def _runner_stem(backtest: dict[str, Any]) -> str:
+    return Path(_relative_parts(backtest)[-1]).stem
+
+
+def _runner_family(backtest: dict[str, Any]) -> str:
+    relative_parts = _relative_parts(backtest)
+    if relative_parts and relative_parts[0] == "private":
+        return "Private"
+
+    stem = _runner_stem(backtest)
+    if stem.startswith("kalshi_"):
+        return "Kalshi native"
+    if "_pmxt_" in stem:
+        return "Polymarket PMXT"
+    if stem.startswith("polymarket_"):
+        return "Polymarket native"
+    return "Misc"
+
+
+def _pretty_strategy_token(token: str) -> str:
+    special = {
+        "api": "API",
+        "clob": "CLOB",
+        "ema": "EMA",
+        "pmxt": "PMXT",
+        "rsi": "RSI",
+        "vwap": "VWAP",
+    }
+    lowered = token.lower()
+    if lowered in special:
+        return special[lowered]
+    return lowered.capitalize()
+
+
+def _runner_title(backtest: dict[str, Any]) -> str:
+    stem = _runner_stem(backtest)
+    prefixes = (
+        "kalshi_trade_tick_",
+        "polymarket_quote_tick_pmxt_",
+        "polymarket_quote_tick_",
+        "polymarket_trade_tick_",
+    )
+    for prefix in prefixes:
+        if stem.startswith(prefix):
+            stem = stem[len(prefix) :]
+            break
+
+    return " ".join(_pretty_strategy_token(token) for token in stem.split("_"))
+
+
+def _menu_sort_key(backtest: dict[str, Any]) -> tuple[int, str, str]:
+    family_order = {
+        "Kalshi native": 0,
+        "Polymarket native": 1,
+        "Polymarket PMXT": 2,
+        "Private": 3,
+        "Misc": 4,
+    }
+    family = _runner_family(backtest)
+    return (
+        family_order.get(family, 99),
+        _runner_title(backtest).casefold(),
+        _relative_runner_path(backtest).as_posix(),
+    )
+
+
+def _shortcut_candidates(backtest: dict[str, Any]) -> list[str]:
+    words = re.findall(
+        r"[A-Za-z]+",
+        f"{_runner_family(backtest)} {_runner_title(backtest)} {_runner_stem(backtest)}",
+    )
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    for word in words:
+        candidate = word[0].lower()
+        if candidate == "q":
+            continue
+        if candidate not in seen:
+            seen.add(candidate)
+            candidates.append(candidate)
+
+    for word in words:
+        for candidate in word[1:].lower():
+            if candidate == "q":
+                continue
+            if candidate not in seen:
+                seen.add(candidate)
+                candidates.append(candidate)
+
+    for candidate in SHORTCUT_LETTERS:
+        if candidate not in seen:
+            seen.add(candidate)
+            candidates.append(candidate)
+
+    return candidates
+
+
+def _assign_shortcuts(
+    backtests: list[dict[str, Any]],
+) -> dict[str, str]:
+    shortcuts: dict[str, str] = {}
+    used: set[str] = set()
+
+    for backtest in backtests:
+        key = _relative_runner_path(backtest).as_posix()
+        for candidate in _shortcut_candidates(backtest):
+            if candidate not in used:
+                used.add(candidate)
+                shortcuts[key] = candidate
+                break
+        else:  # pragma: no cover - guarded by available fallback alphabet size
+            raise RuntimeError("Not enough unique letter shortcuts for backtest menu")
+
+    return shortcuts
+
+
+def _runner_spec_preview(path: Path, *, max_lines: int = 18) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        return f"(unable to read runner file: {exc})"
+
+    start = 0
+    for index, line in enumerate(lines):
+        if (
+            line.startswith("NAME =")
+            or line.startswith("DESCRIPTION =")
+            or line.startswith("DATA =")
+        ):
+            start = index
+            break
+
+    snippet_lines = lines[start : start + max_lines]
+    return "\n".join(snippet_lines).strip() or "(runner file is empty)"
+
+
+def _runner_preview(backtest: dict[str, Any]) -> str:
+    relative_path = _relative_runner_path(backtest)
+    description = backtest.get("description") or "No description provided."
+    snippet = _runner_spec_preview(PROJECT_ROOT / relative_path)
+
+    return (
+        f"{relative_path}\n\n"
+        f"{description}\n\n"
+        "Run\n"
+        f"  uv run python {relative_path}\n\n"
+        "Spec\n"
+        f"{snippet}"
+    )
+
+
+def _supports_terminal_menu() -> bool:
+    if TerminalMenu is None:
+        return False
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return False
+    term = os.getenv("TERM", "").strip()
+    if not term or term.casefold() in {"dumb", "unknown"}:
+        return False
+    try:
+        probe = subprocess.run(
+            ["tput", "clear"],
+            check=False,
+            env={**os.environ, "TERM": term},
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
+    return probe.returncode == 0
+
+
+def _show_basic_menu(backtests: list[dict[str, Any]]) -> int:
+    """Print numbered menu and return the chosen index (0-based), or -1 to exit."""
+    print(f"\n{BOLD}Select a backtest:{RESET}\n")
+    print(f"  {BOLD}backtests/{RESET}")
+    for line in _render_menu_tree(_build_menu_tree(backtests), prefix="  "):
+        print(line)
+    print(f"\n  {DIM}0. Exit{RESET}\n")
+
+    try:
+        raw = input("Enter number: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return -1
+
+    try:
+        choice = int(raw)
+    except ValueError:
+        print("Invalid input.")
+        return -1
+
+    if choice == 0:
+        return -1
+    if choice < 1 or choice > len(backtests):
+        print("Invalid choice.")
+        return -1
+
+    return choice - 1
+
+
+def _show_terminal_menu(backtests: list[dict[str, Any]]) -> int:
+    sorted_backtests = sorted(backtests, key=_menu_sort_key)
+    shortcuts = _assign_shortcuts(sorted_backtests)
+    family_width = max(len(_runner_family(backtest)) for backtest in sorted_backtests)
+
+    preview_lookup: dict[str, str] = {}
+    menu_entries: list[str] = []
+    for backtest in sorted_backtests:
+        relative_key = _relative_runner_path(backtest).as_posix()
+        shortcut = shortcuts[relative_key]
+        preview_lookup[relative_key] = _runner_preview(backtest)
+        menu_entries.append(
+            f"[{shortcut}] {_runner_family(backtest):<{family_width}}  {_runner_title(backtest)}|{relative_key}"
+        )
+
+    terminal_menu = TerminalMenu(
+        menu_entries,
+        title=(
+            MENU_TITLE,
+            "letters run immediately, enter runs selection, / searches, q exits",
+            f"{len(sorted_backtests)} runnable entries | preview shows the flat experiment spec",
+        ),
+        menu_cursor="> ",
+        menu_cursor_style=("fg_cyan", "bold"),
+        menu_highlight_style=("bold",),
+        shortcut_brackets_highlight_style=("fg_gray",),
+        shortcut_key_highlight_style=("fg_blue", "bold"),
+        preview_command=lambda preview_key: preview_lookup.get(preview_key, ""),
+        preview_size=0.45,
+        preview_title="runner preview",
+        search_case_sensitive=False,
+        show_search_hint=True,
+        show_shortcut_hints=False,
+        status_bar=(
+            "keep public runners honest | BACKTEST_ENABLE_TIMING=0 disables timing output"
+        ),
+        status_bar_style=("fg_yellow", "bg_black"),
+        status_bar_below_preview=True,
+    )
+    selection = terminal_menu.show()
+    if selection is None:
+        return -1
+
+    selected_entry = menu_entries[selection]
+    selected_key = selected_entry.split("|", 1)[1]
+    for index, backtest in enumerate(backtests):
+        if _relative_runner_path(backtest).as_posix() == selected_key:
+            return index
+    return -1
+
+
 def _build_menu_tree(backtests: list[dict[str, Any]]) -> dict[str, Any]:
     root: dict[str, Any] = {"dirs": {}, "entries": []}
     for index, backtest in enumerate(backtests, start=1):
@@ -140,31 +407,13 @@ def _render_menu_tree(
 
 
 def show_menu(backtests: list[dict]) -> int:
-    """Print numbered menu and return the chosen index (0-based), or -1 to exit."""
-    print(f"\n{BOLD}Select a backtest:{RESET}\n")
-    print(f"  {BOLD}backtests/{RESET}")
-    for line in _render_menu_tree(_build_menu_tree(backtests), prefix="  "):
-        print(line)
-    print(f"\n  {DIM}0. Exit{RESET}\n")
-
-    try:
-        raw = input("Enter number: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        return -1
-
-    try:
-        choice = int(raw)
-    except ValueError:
-        print("Invalid input.")
-        return -1
-
-    if choice == 0:
-        return -1
-    if choice < 1 or choice > len(backtests):
-        print("Invalid choice.")
-        return -1
-
-    return choice - 1
+    """Return the chosen backtest index, or -1 to exit."""
+    if _supports_terminal_menu():
+        try:
+            return _show_terminal_menu(backtests)
+        except (NotImplementedError, OSError, subprocess.SubprocessError):
+            pass
+    return _show_basic_menu(backtests)
 
 
 def main() -> None:

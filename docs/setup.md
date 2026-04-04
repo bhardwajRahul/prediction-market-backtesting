@@ -16,7 +16,7 @@ cd prediction-market-backtesting
 unset CONDA_PREFIX
 
 uv venv --python 3.13
-uv pip install -e nautilus_pm/ bokeh plotly numpy py-clob-client duckdb
+uv pip install -e nautilus_pm/ bokeh plotly numpy py-clob-client duckdb simple-term-menu
 ```
 
 You can also use:
@@ -35,6 +35,9 @@ Interactive backtest menu:
 ```bash
 make backtest
 ```
+
+The interactive menu uses `simple-term-menu` with single-letter shortcuts,
+search via `/`, and a runner preview pane.
 
 Direct entrypoint:
 
