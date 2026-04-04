@@ -4,7 +4,7 @@
 # See the repository NOTICE file for provenance and licensing scope.
 
 """
-Example PMXT quote-tick runner using multiple fixed historical sims.
+Example PMXT quote-tick multi-sim runner using fixed historical sims.
 """
 
 # ruff: noqa: E402
@@ -30,9 +30,9 @@ from backtests._shared._timing_harness import timing_harness
 from backtests._shared.data_sources import PMXT, Polymarket, QuoteTick
 
 
-NAME = "polymarket_quote_tick_pmxt_sports_vwap_reversion"
+NAME = "polymarket_quote_tick_pmxt_multi_sim_runner"
 
-DESCRIPTION = "Example PMXT quote-tick runner showing multiple fixed historical sims"
+DESCRIPTION = "Example PMXT quote-tick multi-sim runner using fixed historical sims"
 
 DATA = MarketDataConfig(
     platform=Polymarket,

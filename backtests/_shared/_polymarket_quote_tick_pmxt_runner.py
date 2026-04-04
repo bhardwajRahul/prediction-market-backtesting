@@ -93,6 +93,7 @@ async def run_single_market_pmxt_backtest(
     end_time: pd.Timestamp | datetime | str | None = None,
     data_sources: Sequence[str] = (),
     execution: ExecutionModelConfig | None = None,
+    nautilus_log_level: str = "WARNING",
 ) -> dict[str, Any] | None:
     strategy_factory = resolve_strategy_factory(
         strategy_factory=strategy_factory,
@@ -208,6 +209,7 @@ async def run_single_market_pmxt_backtest(
         liquidity_consumption=True,
         queue_position=False if execution is None else execution.queue_position,
         latency_model=None if execution is None else execution.build_latency_model(),
+        nautilus_log_level=nautilus_log_level,
         requested_start_ns=int(start.value),
         requested_end_ns=int(end.value),
     )
