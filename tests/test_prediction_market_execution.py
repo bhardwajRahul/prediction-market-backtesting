@@ -119,9 +119,9 @@ def test_trade_tick_late_favorite_runner_pins_passive_execution_heuristics():
         "backtests.polymarket_trade_tick_sports_late_favorite_limit_hold"
     )
 
-    assert module.BACKTEST.execution.queue_position is True
+    assert module.EXPERIMENT.execution.queue_position is True
 
-    latency_model = module.BACKTEST.execution.build_latency_model()
+    latency_model = module.EXPERIMENT.execution.build_latency_model()
     assert latency_model is not None
     assert latency_model.base_latency_nanos == 75_000_000
     assert latency_model.insert_latency_nanos == 85_000_000

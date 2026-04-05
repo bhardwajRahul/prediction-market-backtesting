@@ -175,7 +175,24 @@ def _summary_from_rest_base_url(rest_base_url: str | None) -> str:
             "Kalshi native data source requires an explicit REST base URL via "
             "DATA.sources or KALSHI_REST_BASE_URL."
         )
-    return f"Kalshi source: native (rest={rest_base_url})"
+    return f"Kalshi source: native (rest:{rest_base_url})"
+
+
+def _parse_named_source(raw_source: str) -> str | None:
+    stripped = raw_source.strip()
+    for separator in (":", "="):
+        role, found, value = stripped.partition(separator)
+        if not found:
+            continue
+        if role.strip().casefold() not in {"rest", "api"}:
+            continue
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise ValueError(
+                f"Kalshi source {raw_source!r} is missing a REST base URL value."
+            )
+        return normalized_value
+    return None
 
 
 def _resolve_explicit_sources(
@@ -184,12 +201,13 @@ def _resolve_explicit_sources(
     rest_base_url: str | None = None
 
     for raw_source in sources:
-        if looks_like_local_path(raw_source):
+        candidate = _parse_named_source(raw_source) or raw_source
+        if looks_like_local_path(candidate):
             raise ValueError(
                 "Native Kalshi trade-tick sources do not support local path inputs yet. "
                 f"Received {raw_source!r}.",
             )
-        normalized = normalize_urlish(raw_source)
+        normalized = normalize_urlish(candidate)
         if rest_base_url is not None and normalized != rest_base_url:
             raise ValueError(
                 "Kalshi explicit sources supports at most one REST base URL."
@@ -199,7 +217,7 @@ def _resolve_explicit_sources(
     return (
         KalshiNativeDataSourceSelection(
             summary=(
-                f"Kalshi source: native (rest={rest_base_url})"
+                f"Kalshi source: native (rest:{rest_base_url})"
                 if rest_base_url is not None
                 else "Kalshi source: native public endpoint"
             ),

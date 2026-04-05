@@ -23,13 +23,9 @@ prediction-market example code during March 2026, beginning with refactor
 commit `b34beabd4b` on 2026-03-11, and now carry file-level LGPL provenance
 notices with file-specific change dates:
 
-- `backtests/_shared/_kalshi_trade_tick_defaults.py`
 - `backtests/_shared/_kalshi_trade_tick_runner.py`
-- `backtests/_shared/_polymarket_quote_tick_defaults.py`
 - `backtests/_shared/_polymarket_quote_tick_pmxt_runner.py`
-- `backtests/_shared/_polymarket_trade_tick_defaults.py`
 - `backtests/_shared/_polymarket_trade_tick_runner.py`
-- `backtests/_shared/_trade_tick_defaults.py`
 - `backtests/kalshi_trade_tick_breakout.py`
 - `backtests/kalshi_trade_tick_ema_crossover.py`
 - `backtests/kalshi_trade_tick_panic_fade.py`
@@ -38,6 +34,7 @@ notices with file-specific change dates:
 - `backtests/polymarket_quote_tick_pmxt_breakout.py`
 - `backtests/polymarket_quote_tick_pmxt_deep_value_hold.py`
 - `backtests/polymarket_quote_tick_pmxt_ema_crossover.py`
+- `backtests/polymarket_quote_tick_pmxt_ema_optimizer.py`
 - `backtests/polymarket_quote_tick_pmxt_final_period_momentum.py`
 - `backtests/polymarket_quote_tick_pmxt_late_favorite_limit_hold.py`
 - `backtests/polymarket_quote_tick_pmxt_panic_fade.py`

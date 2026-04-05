@@ -1,6 +1,6 @@
 # Derived from NautilusTrader prediction-market example code.
 # Distributed under the GNU Lesser General Public License Version 3.0 or later.
-# Modified in this repository on 2026-03-11, 2026-04-03, and 2026-04-04.
+# Modified in this repository on 2026-03-11, 2026-04-03, 2026-04-04, and 2026-04-05.
 # See the repository NOTICE file for provenance and licensing scope.
 
 """
@@ -20,18 +20,11 @@ else:
 
 ensure_repo_root(__file__)
 
+from backtests._shared._experiments import build_replay_experiment
+from backtests._shared._experiments import run_experiment
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
-from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
-from backtests._shared._prediction_market_backtest import finalize_market_results
 from backtests._shared._prediction_market_runner import MarketDataConfig
-from backtests._shared._trade_tick_defaults import (
-    DEFAULT_FIXED_TRADE_TICK_SPORTS_LOOKBACK_DAYS,
-)
-from backtests._shared._trade_tick_defaults import DEFAULT_INITIAL_CASH
-from backtests._shared._trade_tick_defaults import (
-    DEFAULT_POLYMARKET_NATIVE_DATA_SOURCES,
-)
+from backtests._shared._replay_specs import PolymarketTradeTickReplay
 from backtests._shared._timing_harness import timing_harness
 from backtests._shared.data_sources import Native, Polymarket, TradeTick
 
@@ -42,19 +35,24 @@ DESCRIPTION = (
     "Late-breakout momentum on a fixed Polymarket sports basket pinned to market close"
 )
 
+EMIT_HTML = True
+CHART_OUTPUT_PATH = None
+
 DATA = MarketDataConfig(
     platform=Polymarket,
     data_type=TradeTick,
     vendor=Native,
-    sources=DEFAULT_POLYMARKET_NATIVE_DATA_SOURCES,
+    sources=(
+        "gamma:https://gamma-api.polymarket.com",
+        "trades:https://data-api.polymarket.com",
+        "clob:https://clob.polymarket.com",
+    ),
 )
 
-# Pin each replay window to the market close so the fixed basket stays
-# reproducible and under the public trades API offset ceiling.
-FIXED_LOOKBACK_DAYS = DEFAULT_FIXED_TRADE_TICK_SPORTS_LOOKBACK_DAYS
+FIXED_LOOKBACK_DAYS = 7
 
-SIMS = (
-    MarketSimConfig(
+REPLAYS = (
+    PolymarketTradeTickReplay(
         market_slug="will-ukraine-qualify-for-the-2026-fifa-world-cup",
         lookback_days=FIXED_LOOKBACK_DAYS,
         end_time="2026-03-26T23:53:59Z",
@@ -63,7 +61,7 @@ SIMS = (
             "market_close_time_ns": 1774569239000000000,
         },
     ),
-    MarketSimConfig(
+    PolymarketTradeTickReplay(
         market_slug="will-man-city-win-the-202526-champions-league",
         lookback_days=FIXED_LOOKBACK_DAYS,
         end_time="2026-03-18T01:28:17Z",
@@ -72,7 +70,7 @@ SIMS = (
             "market_close_time_ns": 1773797297000000000,
         },
     ),
-    MarketSimConfig(
+    PolymarketTradeTickReplay(
         market_slug="will-chelsea-win-the-202526-champions-league",
         lookback_days=FIXED_LOOKBACK_DAYS,
         end_time="2026-03-18T01:22:09Z",
@@ -81,7 +79,7 @@ SIMS = (
             "market_close_time_ns": 1773796929000000000,
         },
     ),
-    MarketSimConfig(
+    PolymarketTradeTickReplay(
         market_slug="will-newcastle-win-the-202526-champions-league",
         lookback_days=FIXED_LOOKBACK_DAYS,
         end_time="2026-03-18T22:56:01Z",
@@ -90,7 +88,7 @@ SIMS = (
             "market_close_time_ns": 1773874561000000000,
         },
     ),
-    MarketSimConfig(
+    PolymarketTradeTickReplay(
         market_slug="will-leverkusen-win-the-202526-champions-league",
         lookback_days=FIXED_LOOKBACK_DAYS,
         end_time="2026-03-18T01:28:15Z",
@@ -122,29 +120,27 @@ REPORT = MarketReportConfig(
     pnl_label="PnL (USDC)",
 )
 
-BACKTEST = PredictionMarketBacktest(
+EXPERIMENT = build_replay_experiment(
     name=NAME,
+    description=DESCRIPTION,
     data=DATA,
-    sims=SIMS,
+    replays=REPLAYS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=DEFAULT_INITIAL_CASH,
+    initial_cash=100.0,
     probability_window=180,
     min_trades=25,
     min_price_range=0.01,
+    report=REPORT,
+    empty_message="No fixed Polymarket sports sims met the final-period requirements.",
+    partial_message="Completed {completed} of {total} fixed sports sims.",
+    emit_html=EMIT_HTML,
+    chart_output_path=CHART_OUTPUT_PATH,
 )
 
 
 @timing_harness
 def run() -> None:
-    results = BACKTEST.run()
-    if not results:
-        print("No fixed Polymarket sports sims met the final-period requirements.")
-        return
-
-    if len(results) < len(SIMS):
-        print(f"Completed {len(results)} of {len(SIMS)} fixed sports sims.")
-
-    finalize_market_results(name=NAME, results=results, report=REPORT)
+    run_experiment(EXPERIMENT)
 
 
 if __name__ == "__main__":
