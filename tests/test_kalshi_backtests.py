@@ -62,11 +62,11 @@ def test_kalshi_backtests_build_expected_trade_tick_strategy(
     module = importlib.import_module(module_name)
     captured: dict[str, object] = {}
 
-    def _fake_run_reported_backtest(**kwargs):  # type: ignore[no-untyped-def]
-        captured.update(kwargs)
+    def _fake_run_experiment(experiment):  # type: ignore[no-untyped-def]
+        captured["experiment"] = experiment
         return []
 
-    monkeypatch.setattr(module, "run_reported_backtest", _fake_run_reported_backtest)
+    monkeypatch.setattr(module, "run_experiment", _fake_run_experiment)
 
     module.run()
 
@@ -79,14 +79,14 @@ def test_kalshi_backtests_build_expected_trade_tick_strategy(
 
     assert isinstance(strategy, strategy_cls)
     assert isinstance(strategy.config, config_cls)
-    assert len(module.SIMS) == 1
-    assert module.SIMS[0].market_ticker == "KXNEXTIRANLEADER-45JAN01-MKHA"
-    assert module.SIMS[0].lookback_days == 30
-    assert module.BACKTEST.name == module.NAME
-    assert module.BACKTEST.data == module.DATA
-    assert module.BACKTEST.sims == module.SIMS
-    assert module.BACKTEST.initial_cash == 100.0
-    assert module.BACKTEST.min_trades == 1000
-    assert module.BACKTEST.min_price_range == 0.03
-    assert captured["backtest"] is module.BACKTEST
-    assert captured["report"] == module.REPORT
+    assert len(module.REPLAYS) == 1
+    assert module.REPLAYS[0].market_ticker == "KXNEXTIRANLEADER-45JAN01-MKHA"
+    assert module.REPLAYS[0].lookback_days == 30
+    assert module.EXPERIMENT.name == module.NAME
+    assert module.EXPERIMENT.data == module.DATA
+    assert module.EXPERIMENT.replays == module.REPLAYS
+    assert module.EXPERIMENT.initial_cash == 100.0
+    assert module.EXPERIMENT.min_trades == 1000
+    assert module.EXPERIMENT.min_price_range == 0.03
+    assert module.EXPERIMENT.report == module.REPORT
+    assert captured["experiment"] is module.EXPERIMENT

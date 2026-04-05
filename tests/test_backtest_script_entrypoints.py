@@ -22,7 +22,13 @@ PUBLIC_RUNNER_PATHS = sorted(
 PMXT_SINGLE_MARKET_QUOTE_TICK_RUNNERS = sorted(
     path.relative_to(REPO_ROOT)
     for path in BACKTESTS_ROOT.glob("polymarket_quote_tick_pmxt_*.py")
-    if "sports_" not in path.name and "multi_sim_runner" not in path.name
+    if "sports_" not in path.name
+    and "multi_sim_runner" not in path.name
+    and "optimizer" not in path.name
+)
+PMXT_QUOTE_TICK_OPTIMIZER_RUNNERS = sorted(
+    path.relative_to(REPO_ROOT)
+    for path in BACKTESTS_ROOT.glob("polymarket_quote_tick_pmxt_*optimizer.py")
 )
 
 FIXED_SPORTS_TRADE_TICK_RUNNERS = [
@@ -46,6 +52,7 @@ REPO_BOOTSTRAP_HELPERS = {
     [
         Path("backtests/kalshi_trade_tick_breakout.py"),
         Path("backtests/polymarket_quote_tick_pmxt_ema_crossover.py"),
+        Path("backtests/polymarket_quote_tick_pmxt_ema_optimizer.py"),
         Path("backtests/polymarket_trade_tick_panic_fade.py"),
         Path("backtests/polymarket_trade_tick_vwap_reversion.py"),
     ],
@@ -128,12 +135,39 @@ def test_public_runner_modules_expose_metadata_contract(
     assert (
         isinstance(globals_dict.get("DESCRIPTION"), str) and globals_dict["DESCRIPTION"]
     )
+    assert isinstance(globals_dict.get("EMIT_HTML"), bool)
+    assert "CHART_OUTPUT_PATH" in globals_dict
+    assert globals_dict["CHART_OUTPUT_PATH"] is None or isinstance(
+        globals_dict["CHART_OUTPUT_PATH"], str
+    )
     if "DATA" in globals_dict:
         data = globals_dict["DATA"]
         assert getattr(data, "platform", None) in {"kalshi", "polymarket"}
         assert getattr(data, "data_type", None) in {"trade_tick", "quote_tick"}
         assert isinstance(getattr(data, "vendor", None), str) and data.vendor
         assert isinstance(getattr(data, "sources", ()), tuple)
+    if "EXPERIMENT" in globals_dict:
+        experiment = globals_dict["EXPERIMENT"]
+        optimization = getattr(experiment, "optimization", None)
+        if optimization is not None:
+            assert getattr(optimization, "emit_html", None) == globals_dict["EMIT_HTML"]
+            assert (
+                getattr(optimization, "chart_output_path", object())
+                == globals_dict["CHART_OUTPUT_PATH"]
+            )
+        else:
+            assert getattr(experiment, "emit_html", None) == globals_dict["EMIT_HTML"]
+            assert (
+                getattr(experiment, "chart_output_path", object())
+                == globals_dict["CHART_OUTPUT_PATH"]
+            )
+    if "OPTIMIZATION" in globals_dict:
+        optimization = globals_dict["OPTIMIZATION"]
+        assert getattr(optimization, "emit_html", None) == globals_dict["EMIT_HTML"]
+        assert (
+            getattr(optimization, "chart_output_path", object())
+            == globals_dict["CHART_OUTPUT_PATH"]
+        )
     assert callable(globals_dict.get("run"))
 
 
@@ -194,19 +228,78 @@ def test_pmxt_single_market_quote_tick_runners_expose_explicit_experiment_consta
     assert "INITIAL_CASH" not in globals_dict
 
     data = globals_dict["DATA"]
-    sims = globals_dict["SIMS"]
-    backtest = globals_dict["BACKTEST"]
+    replays = globals_dict["REPLAYS"]
+    experiment = globals_dict["EXPERIMENT"]
 
     assert data.platform == "polymarket"
     assert data.data_type == "quote_tick"
     assert data.vendor == "pmxt"
-    assert len(sims) == 1
-    assert sims[0].market_slug
-    assert sims[0].start_time
-    assert sims[0].end_time
-    assert backtest.initial_cash == 100.0
-    assert backtest.min_quotes == 500
-    assert backtest.min_price_range == 0.005
+    assert len(replays) == 1
+    assert replays[0].market_slug
+    assert replays[0].start_time
+    assert replays[0].end_time
+    assert globals_dict["EMIT_HTML"] is True
+    assert globals_dict["CHART_OUTPUT_PATH"] is None
+    assert experiment.initial_cash == 100.0
+    assert experiment.min_quotes == 500
+    assert experiment.min_price_range == 0.005
+    assert experiment.emit_html is True
+    assert experiment.chart_output_path is None
+
+
+@pytest.mark.parametrize("relative_path", PMXT_QUOTE_TICK_OPTIMIZER_RUNNERS)
+def test_pmxt_quote_tick_optimizer_runners_expose_explicit_search_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: Path,
+) -> None:
+    script_path = REPO_ROOT / relative_path
+    normalized_sys_path = [
+        entry for entry in sys.path if Path(entry or ".").resolve() != REPO_ROOT
+    ]
+    monkeypatch.setattr(sys, "path", [str(script_path.parent), *normalized_sys_path])
+
+    globals_dict = runpy.run_path(str(script_path), run_name="__script_test__")
+
+    assert "MARKET_SLUG" not in globals_dict
+    assert "TOKEN_INDEX" not in globals_dict
+    assert "START_TIME" not in globals_dict
+    assert "END_TIME" not in globals_dict
+
+    data = globals_dict["DATA"]
+    base_replay = globals_dict["BASE_REPLAY"]
+    train_windows = globals_dict["TRAIN_WINDOWS"]
+    holdout_windows = globals_dict["HOLDOUT_WINDOWS"]
+    parameter_grid = globals_dict["PARAMETER_GRID"]
+    optimization = globals_dict["OPTIMIZATION"]
+
+    assert data.platform == "polymarket"
+    assert data.data_type == "quote_tick"
+    assert data.vendor == "pmxt"
+    assert base_replay.market_slug
+    assert base_replay.token_index == 0
+    assert len(train_windows) == 3
+    assert len(holdout_windows) == 1
+    assert set(parameter_grid) == {
+        "fast_period",
+        "slow_period",
+        "entry_buffer",
+        "take_profit",
+        "stop_loss",
+    }
+    assert optimization.data is data
+    assert optimization.base_replay is base_replay
+    assert optimization.strategy_spec is globals_dict["STRATEGY_SPEC"]
+    assert globals_dict["EMIT_HTML"] is False
+    assert globals_dict["CHART_OUTPUT_PATH"] is None
+    assert optimization.emit_html is False
+    assert optimization.chart_output_path is None
+    assert dict(optimization.parameter_grid) == parameter_grid
+    assert optimization.train_windows == train_windows
+    assert optimization.holdout_windows == holdout_windows
+    assert optimization.execution is globals_dict["EXECUTION"]
+    assert optimization.initial_cash == 100.0
+    assert optimization.min_quotes == 500
+    assert optimization.min_price_range == 0.005
 
 
 @pytest.mark.parametrize("relative_path", FIXED_SPORTS_TRADE_TICK_RUNNERS)
@@ -222,16 +315,16 @@ def test_fixed_sports_trade_tick_runners_pin_historical_close_windows(
 
     globals_dict = runpy.run_path(str(script_path), run_name="__script_test__")
 
-    sims = globals_dict["SIMS"]
-    backtest = globals_dict["BACKTEST"]
+    replays = globals_dict["REPLAYS"]
+    experiment = globals_dict["EXPERIMENT"]
     pd = pytest.importorskip("pandas")
 
-    assert backtest.default_lookback_days is None
-    assert backtest.min_price_range == 0.01
-    assert len(sims) >= 2
-    for sim in sims:
-        assert sim.market_slug
-        assert sim.lookback_days == 7
-        assert isinstance(sim.end_time, str) and sim.end_time
-        close_ns = sim.metadata["market_close_time_ns"]
-        assert pd.Timestamp(sim.end_time).value == close_ns
+    assert experiment.default_lookback_days is None
+    assert experiment.min_price_range == 0.01
+    assert len(replays) >= 2
+    for replay in replays:
+        assert replay.market_slug
+        assert replay.lookback_days == 7
+        assert isinstance(replay.end_time, str) and replay.end_time
+        close_ns = replay.metadata["market_close_time_ns"]
+        assert pd.Timestamp(replay.end_time).value == close_ns

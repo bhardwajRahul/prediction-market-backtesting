@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from backtests._shared._market_data_support import load_single_market_runner
+import backtests._shared.data_sources as data_sources
+
+from backtests._shared._market_data_support import build_single_market_replay
 from backtests._shared._market_data_support import resolve_market_data_support
 from backtests._shared._market_data_support import supported_market_data_keys
+from backtests._shared._replay_specs import KalshiTradeTickReplay
+from backtests._shared._replay_specs import PolymarketPMXTQuoteReplay
+from backtests._shared._replay_specs import PolymarketTradeTickReplay
 from backtests._shared.data_sources import Kalshi
 from backtests._shared.data_sources import Native
 from backtests._shared.data_sources import PMXT
 from backtests._shared.data_sources import Polymarket
 from backtests._shared.data_sources import QuoteTick
 from backtests._shared.data_sources import TradeTick
-import backtests._shared.data_sources as data_sources
 
 
 def test_support_matrix_matches_publicly_supported_combinations() -> None:
@@ -29,8 +33,57 @@ def test_support_matrix_matches_publicly_supported_combinations() -> None:
             data_type=data_type,
             vendor=vendor,
         )
-        runner_fn = load_single_market_runner(support.single_market_runner)
-        assert callable(runner_fn)
+        assert support.adapter.key.platform == platform.name
+        assert support.adapter.key.vendor == vendor.name
+        assert support.adapter.key.data_type == data_type.name
+
+
+def test_single_market_replay_construction_is_adapter_owned() -> None:
+    kalshi = resolve_market_data_support(
+        platform=Kalshi,
+        data_type=TradeTick,
+        vendor=Native,
+    )
+    assert build_single_market_replay(
+        support=kalshi,
+        field_values={"market_ticker": "KALSHI-TEST", "lookback_days": 2},
+    ) == KalshiTradeTickReplay(
+        market_ticker="KALSHI-TEST",
+        lookback_days=2,
+    )
+
+    polymarket = resolve_market_data_support(
+        platform=Polymarket,
+        data_type=TradeTick,
+        vendor=Native,
+    )
+    assert build_single_market_replay(
+        support=polymarket,
+        field_values={"market_slug": "demo-market", "token_index": 1},
+    ) == PolymarketTradeTickReplay(
+        market_slug="demo-market",
+        token_index=1,
+    )
+
+    pmxt = resolve_market_data_support(
+        platform=Polymarket,
+        data_type=QuoteTick,
+        vendor=PMXT,
+    )
+    assert build_single_market_replay(
+        support=pmxt,
+        field_values={
+            "market_slug": "demo-market",
+            "token_index": 1,
+            "start_time": "2026-03-24T03:00:00Z",
+            "end_time": "2026-03-24T08:00:00Z",
+        },
+    ) == PolymarketPMXTQuoteReplay(
+        market_slug="demo-market",
+        token_index=1,
+        start_time="2026-03-24T03:00:00Z",
+        end_time="2026-03-24T08:00:00Z",
+    )
 
 
 def test_unsupported_vendor_is_not_exported() -> None:

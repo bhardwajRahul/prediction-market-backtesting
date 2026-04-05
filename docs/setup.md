@@ -64,11 +64,17 @@ uv run python backtests/polymarket_quote_tick_pmxt_ema_crossover.py
 
 Public runner files carry their market, source, and execution assumptions in
 code. PMXT quote-tick runners also pin absolute sample windows; native
-trade-tick runners use rolling lookbacks unless you set `end_time` in `SIMS`
-or `default_end_time` on the backtest. To use a different local PMXT mirror
+trade-tick runners use rolling lookbacks unless you set `end_time` in
+`REPLAYS` or `default_end_time` in the experiment. To use a different local PMXT mirror
 path or a different market, edit the runner file directly or copy it into
 `backtests/private/`. If you already have mirrored PMXT raw hours locally, add
 `local:/path/to/raw-hours` to the runner's `DATA.sources`.
+
+Repo-layer source syntax is explicit on purpose:
+
+- Kalshi native trade-tick runners use `rest:...`
+- Polymarket native trade-tick runners use `gamma:...`, `trades:...`, and `clob:...`
+- PMXT quote-tick runners use `local:...`, `archive:...`, and `relay:...`
 
 To mirror PMXT raw archive hours locally, run:
 

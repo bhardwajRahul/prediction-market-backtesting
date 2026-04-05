@@ -41,6 +41,7 @@ def test_pmxt_runner_uses_l2_execution_settings(monkeypatch):
             initial_cash=100.0,
             emit_summary=False,
             emit_html=False,
+            chart_output_path="output/pmxt_test_chart.html",
             strategy_factory=lambda instrument_id: SimpleNamespace(
                 instrument_id=instrument_id
             ),
@@ -53,6 +54,7 @@ def test_pmxt_runner_uses_l2_execution_settings(monkeypatch):
     assert backtest.data.data_type == "quote_tick"
     assert backtest.data.vendor == "pmxt"
     assert backtest.emit_html is False
+    assert backtest.chart_output_path == "output/pmxt_test_chart.html"
     assert backtest.execution.queue_position is False
     assert backtest.execution.build_latency_model() is None
 

@@ -303,11 +303,11 @@ def _summary_from_overrides(
 ) -> str:
     parts: list[str] = []
     if gamma_base_url is not None:
-        parts.append(f"gamma={gamma_base_url}")
+        parts.append(f"gamma:{gamma_base_url}")
     if trade_api_base_url is not None:
-        parts.append(f"trades={trade_api_base_url}")
+        parts.append(f"trades:{trade_api_base_url}")
     if clob_base_url is not None:
-        parts.append(f"clob={clob_base_url}")
+        parts.append(f"clob:{clob_base_url}")
     if not parts:
         raise ValueError(
             "Polymarket native data source requires explicit gamma, trades, and clob "
@@ -329,17 +329,22 @@ def _normalized_override(
 
 
 def _parse_named_source(raw_source: str) -> tuple[str | None, str]:
-    role, separator, value = raw_source.strip().partition("=")
-    if not separator:
-        return None, raw_source
-    normalized_role = role.strip().casefold()
-    env_name = _POLYMARKET_SOURCE_ROLE_ALIASES.get(normalized_role)
-    if env_name is None:
-        return None, raw_source
-    normalized_value = value.strip()
-    if not normalized_value:
-        raise ValueError(f"Polymarket source {raw_source!r} is missing a URL value.")
-    return env_name, normalized_value
+    stripped = raw_source.strip()
+    for separator in (":", "="):
+        role, found, value = stripped.partition(separator)
+        if not found:
+            continue
+        normalized_role = role.strip().casefold()
+        env_name = _POLYMARKET_SOURCE_ROLE_ALIASES.get(normalized_role)
+        if env_name is None:
+            continue
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise ValueError(
+                f"Polymarket source {raw_source!r} is missing a URL value."
+            )
+        return env_name, normalized_value
+    return None, raw_source
 
 
 def _infer_env_name_from_url(url: str) -> str:
@@ -362,7 +367,7 @@ def _infer_env_name_from_url(url: str) -> str:
         return POLYMARKET_GAMMA_BASE_URL_ENV
     raise ValueError(
         "Polymarket native source URLs must either include an explicit role prefix "
-        "like gamma=..., trades=..., clob=... or end with /events, /markets, "
+        "like gamma:..., trades:..., clob:... or end with /events, /markets, "
         "/trades, or /fee-rate."
     )
 

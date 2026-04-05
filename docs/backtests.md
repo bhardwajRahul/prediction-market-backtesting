@@ -25,6 +25,8 @@ Good public examples:
   [`backtests/polymarket_trade_tick_vwap_reversion.py`](https://github.com/evan-kolberg/prediction-market-backtesting/blob/main/backtests/polymarket_trade_tick_vwap_reversion.py)
 - Polymarket quote-tick runner with PMXT vendor data:
   [`backtests/polymarket_quote_tick_pmxt_ema_crossover.py`](https://github.com/evan-kolberg/prediction-market-backtesting/blob/main/backtests/polymarket_quote_tick_pmxt_ema_crossover.py)
+- PMXT quote-tick EMA optimization runner with train/holdout windows:
+  [`backtests/polymarket_quote_tick_pmxt_ema_optimizer.py`](https://github.com/evan-kolberg/prediction-market-backtesting/blob/main/backtests/polymarket_quote_tick_pmxt_ema_optimizer.py)
 - fixed-basket multi-market runner:
   [`backtests/polymarket_trade_tick_sports_vwap_reversion.py`](https://github.com/evan-kolberg/prediction-market-backtesting/blob/main/backtests/polymarket_trade_tick_sports_vwap_reversion.py)
 
@@ -37,8 +39,9 @@ window that actually loaded, including `planned_start`, `planned_end`,
 ## Runner Contract
 
 Public runners should read like flat experiment specs.
-`PredictionMarketBacktest` is the canonical repo-layer execution surface. The
-canonical shape is:
+The public contract is manifest-first: typed replay specs plus one
+`EXPERIMENT` object. `PredictionMarketBacktest` is now an internal executor
+used by the shared experiment layer. The canonical shape is:
 
 ```python
 from decimal import Decimal
@@ -52,16 +55,18 @@ ensure_repo_root(__file__)
 
 from backtests._shared._execution_config import ExecutionModelConfig
 from backtests._shared._execution_config import StaticLatencyConfig
+from backtests._shared._experiments import build_replay_experiment
+from backtests._shared._experiments import run_experiment
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
-from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
-from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
+from backtests._shared._replay_specs import PolymarketPMXTQuoteReplay
 from backtests._shared._timing_harness import timing_harness
 from backtests._shared.data_sources import PMXT, Polymarket, QuoteTick
 
 NAME = "polymarket_quote_tick_pmxt_ema_crossover"
 DESCRIPTION = "EMA crossover momentum on one Polymarket market"
+EMIT_HTML = True
+CHART_OUTPUT_PATH = None
 
 DATA = MarketDataConfig(
     platform=Polymarket,
@@ -74,8 +79,8 @@ DATA = MarketDataConfig(
     ),
 )
 
-SIMS = (
-    MarketSimConfig(
+REPLAYS = (
+    PolymarketPMXTQuoteReplay(
         market_slug="market-slug",
         token_index=0,
         start_time="2026-03-19T07:35:57.277659Z",
@@ -114,38 +119,68 @@ EXECUTION = ExecutionModelConfig(
     ),
 )
 
-BACKTEST = PredictionMarketBacktest(
+EXPERIMENT = build_replay_experiment(
     name=NAME,
+    description=DESCRIPTION,
     data=DATA,
-    sims=SIMS,
+    replays=REPLAYS,
     strategy_configs=STRATEGY_CONFIGS,
     initial_cash=100.0,
     probability_window=256,
     min_quotes=500,
     min_price_range=0.005,
     execution=EXECUTION,
+    report=REPORT,
+    empty_message="No sims met the quote-tick requirements.",
+    emit_html=EMIT_HTML,
+    chart_output_path=CHART_OUTPUT_PATH,
 )
 
 @timing_harness
 def run() -> None:
-    run_reported_backtest(
-        backtest=BACKTEST,
-        report=REPORT,
-        empty_message="No sims met the quote-tick requirements.",
-    )
+    run_experiment(EXPERIMENT)
 ```
 
 Every public runner should expose:
 
 - `NAME`
 - `DESCRIPTION`
+- `EMIT_HTML`
+- `CHART_OUTPUT_PATH`
 - `DATA`
-- `SIMS`
+- `REPLAYS`
 - `STRATEGY_CONFIGS`
 - `REPORT` when the runner prints a summary table or writes combined reports
 - `EXECUTION` when the runner models non-default queue position or exchange latency
-- `BACKTEST`
+- `EXPERIMENT`
 - `run()`
+
+## Optimization Runners
+
+Parameter-search runners are a separate repo-layer orchestration surface. They
+should stay above the replay executor, not inside it.
+
+The canonical optimization shape is:
+
+- `DATA` for the venue, modality, vendor, and source priority
+- `BASE_REPLAY` for the shared market identity
+- `TRAIN_WINDOWS` and optional `HOLDOUT_WINDOWS` for explicit replay windows
+- `STRATEGY_SPEC` with `__SEARCH__:<name>` placeholders inside one tunable
+  strategy config
+- `PARAMETER_GRID` with finite candidate values for each placeholder
+- `EXECUTION` for queue-position and latency assumptions
+- `EMIT_HTML` to explicitly keep chart HTML on or off
+- `CHART_OUTPUT_PATH` to keep output location explicit in the file
+- `OPTIMIZATION` for the shared search config
+- `run()` to launch the search and write optimizer artifacts under `output/`
+
+Good reference:
+
+- [`backtests/polymarket_quote_tick_pmxt_ema_optimizer.py`](https://github.com/evan-kolberg/prediction-market-backtesting/blob/main/backtests/polymarket_quote_tick_pmxt_ema_optimizer.py)
+
+These files are research tooling, not profitability claims. The selected config
+is only the best config under the declared windows, execution assumptions, and
+scoring function in that runner file.
 
 ## Designing Good Runner Files
 
@@ -164,24 +199,24 @@ Keep the top-level file declarative. Keep shared mechanics in `backtests/_shared
 That division is deliberate:
 
 - `DATA` selects the platform, modality, vendor, and source priority
-- `SIMS` is the instrument basket, whether that basket contains one market or many
-- `STRATEGY_CONFIGS` is the stable strategy payload passed into the backtest object
+- `REPLAYS` is the instrument basket, whether that basket contains one market or many
+- `STRATEGY_CONFIGS` is the stable strategy payload passed into the experiment
 - `EXECUTION` holds optional queue-position and latency assumptions
-- `BACKTEST` owns loading, engine construction, and execution
+- `EXPERIMENT` owns the replay manifest, reporting, and execution settings
 
 ## Multi-Market Strategy Configs
 
-`PredictionMarketBacktest` supports either one strategy instance per sim or one
+The replay executor supports either one strategy instance per replay or one
 batch-level strategy config that references the full basket.
 
 Useful config sentinels:
 
 - `__SIM_INSTRUMENT_ID__` binds to the current sim instrument
 - `__ALL_SIM_INSTRUMENT_IDS__` binds to every loaded sim instrument in the basket
-- `__SIM_METADATA__:<key>` binds metadata from `MarketSimConfig.metadata`
+- `__SIM_METADATA__:<key>` binds metadata from replay `metadata`
 
-That lets a runner expose `SIMS` explicitly and still pass one clean
-`STRATEGY_CONFIGS` payload into the runner object.
+That lets a runner expose `REPLAYS` explicitly and still pass one clean
+`STRATEGY_CONFIGS` payload into the experiment.
 
 ## Running Backtests
 
@@ -213,9 +248,14 @@ uv run python backtests/polymarket_quote_tick_pmxt_ema_crossover.py
 Public runners keep their experiment inputs in code. PMXT quote-tick runners
 pin absolute sample windows; native trade-tick runners pin market/source
 selection and use rolling lookbacks unless you also set `end_time`. If you want
-a different market, window, cash value, or vendor source priority, edit
-`DATA`, `SIMS`, or `STRATEGY_CONFIGS` in the runner file, or copy the file into
+a different market, window, cash value, vendor source priority, or chart
+behavior, edit `DATA`, `REPLAYS`, `STRATEGY_CONFIGS`, `EMIT_HTML`, or
+`CHART_OUTPUT_PATH` in the runner file, or copy the file into
 `backtests/private/` and customize it there.
+
+Optimizer runners follow the same rule: the file itself should carry the train
+windows, holdout windows, parameter grid, chart-emission toggle, chart output
+path, and search scoring assumptions.
 
 ## Editing Runner Inputs
 
@@ -224,12 +264,15 @@ definition. The file itself should carry the actual values.
 
 Use these top-level objects as the edit surface:
 
+- `EMIT_HTML` to skip per-run HTML output when you are sweeping many runners
+- `CHART_OUTPUT_PATH` for an explicit file, directory, or `{name}` /
+  `{market_id}` template
 - `DATA` for platform, modality, vendor, and source priority
-- `SIMS` for one market or a basket of markets
+- `REPLAYS` for one market or a basket of markets
 - `STRATEGY_CONFIGS` for strategy paths and parameter payloads
 - `EXECUTION` for optional queue-position and latency heuristics
-- `BACKTEST` for shared execution requirements like cash, quote/trade minimums,
-  probability window, and Nautilus log level
+- `EXPERIMENT` for shared execution requirements like cash, quote/trade minimums,
+  probability window, report policy, and Nautilus log level
 
 Low-level loader env vars still exist for custom integrations and private
 workflows:
@@ -248,6 +291,9 @@ workflows:
 - `native` means the loader is using venue-native APIs or venue-native historical
   adapters
 - public runners pin native source selection in `DATA.sources`
+- Kalshi native runners use explicit `rest:` source entries in `DATA.sources`
+- Polymarket native runners use explicit `gamma:`, `trades:`, and `clob:`
+  source entries in `DATA.sources`
 - low-level native loader URLs can still be overridden outside the public runner
   layer if you are building a custom workflow
 

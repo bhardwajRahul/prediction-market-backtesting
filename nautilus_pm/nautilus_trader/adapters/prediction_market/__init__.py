@@ -20,5 +20,21 @@ Shared prediction-market adapter helpers.
 """
 
 from nautilus_trader.adapters.prediction_market.fill_model import PredictionMarketTakerFillModel
+from nautilus_trader.adapters.prediction_market.replay import HistoricalReplayAdapter
+from nautilus_trader.adapters.prediction_market.replay import LoadedReplay
+from nautilus_trader.adapters.prediction_market.replay import ReplayAdapterKey
+from nautilus_trader.adapters.prediction_market.replay import ReplayCoverageStats
+from nautilus_trader.adapters.prediction_market.replay import ReplayEngineProfile
+from nautilus_trader.adapters.prediction_market.replay import ReplayLoadRequest
+from nautilus_trader.adapters.prediction_market.replay import ReplayWindow
 
-__all__ = ["PredictionMarketTakerFillModel"]
+__all__ = [
+    "HistoricalReplayAdapter",
+    "LoadedReplay",
+    "PredictionMarketTakerFillModel",
+    "ReplayAdapterKey",
+    "ReplayCoverageStats",
+    "ReplayEngineProfile",
+    "ReplayLoadRequest",
+    "ReplayWindow",
+]

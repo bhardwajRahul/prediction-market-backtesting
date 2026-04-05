@@ -180,7 +180,7 @@ def test_runner_preview_shows_full_file_contents(
         "from pathlib import Path\n"
         "\n"
         "DATA = object()\n"
-        "SIMS = ()\n",
+        "REPLAYS = ()\n",
     )
     contents = "".join(contents)
     runner_path.write_text(contents, encoding="utf-8")

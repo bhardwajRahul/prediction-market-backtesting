@@ -1,6 +1,6 @@
 # Derived from NautilusTrader prediction-market example code.
 # Distributed under the GNU Lesser General Public License Version 3.0 or later.
-# Modified in this repository on 2026-03-11.
+# Modified in this repository on 2026-03-11 and 2026-04-05.
 # See the repository NOTICE file for provenance and licensing scope.
 
 """
@@ -23,17 +23,11 @@ else:
 
 ensure_repo_root(__file__)
 
+from backtests._shared._experiments import build_replay_experiment
+from backtests._shared._experiments import run_experiment
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
-from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
-from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
-from backtests._shared._trade_tick_defaults import DEFAULT_INITIAL_CASH
-from backtests._shared._trade_tick_defaults import DEFAULT_KALSHI_MARKET_TICKER
-from backtests._shared._trade_tick_defaults import DEFAULT_KALSHI_NATIVE_DATA_SOURCES
-from backtests._shared._trade_tick_defaults import (
-    DEFAULT_SINGLE_MARKET_TRADE_TICK_LOOKBACK_DAYS,
-)
+from backtests._shared._replay_specs import KalshiTradeTickReplay
 from backtests._shared._timing_harness import timing_harness
 from backtests._shared.data_sources import Kalshi, Native, TradeTick
 
@@ -42,17 +36,20 @@ NAME = "kalshi_trade_tick_breakout"
 
 DESCRIPTION = "Volatility breakout strategy on a single Kalshi market using trade ticks"
 
+EMIT_HTML = True
+CHART_OUTPUT_PATH = None
+
 DATA = MarketDataConfig(
     platform=Kalshi,
     data_type=TradeTick,
     vendor=Native,
-    sources=DEFAULT_KALSHI_NATIVE_DATA_SOURCES,
+    sources=("rest:https://api.elections.kalshi.com/trade-api/v2",),
 )
 
-SIMS = (
-    MarketSimConfig(
-        market_ticker=DEFAULT_KALSHI_MARKET_TICKER,
-        lookback_days=DEFAULT_SINGLE_MARKET_TRADE_TICK_LOOKBACK_DAYS,
+REPLAYS = (
+    KalshiTradeTickReplay(
+        market_ticker="KXNEXTIRANLEADER-45JAN01-MKHA",
+        lookback_days=30,
     ),
 )
 
@@ -77,25 +74,26 @@ REPORT = MarketReportConfig(
     pnl_label="PnL (USD)",
 )
 
-BACKTEST = PredictionMarketBacktest(
+EXPERIMENT = build_replay_experiment(
     name=NAME,
+    description=DESCRIPTION,
     data=DATA,
-    sims=SIMS,
+    replays=REPLAYS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=DEFAULT_INITIAL_CASH,
+    initial_cash=100.0,
     probability_window=60,
     min_trades=1000,
     min_price_range=0.03,
+    report=REPORT,
+    empty_message="No Kalshi breakout sims met the trade-tick requirements.",
+    emit_html=EMIT_HTML,
+    chart_output_path=CHART_OUTPUT_PATH,
 )
 
 
 @timing_harness
 def run() -> None:
-    run_reported_backtest(
-        backtest=BACKTEST,
-        report=REPORT,
-        empty_message="No Kalshi breakout sims met the trade-tick requirements.",
-    )
+    run_experiment(EXPERIMENT)
 
 
 if __name__ == "__main__":

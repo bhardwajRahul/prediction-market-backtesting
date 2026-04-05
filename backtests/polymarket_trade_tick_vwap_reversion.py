@@ -1,6 +1,6 @@
 # Derived from NautilusTrader prediction-market example code.
 # Distributed under the GNU Lesser General Public License Version 3.0 or later.
-# Modified in this repository on 2026-03-11.
+# Modified in this repository on 2026-03-11 and 2026-04-05.
 # See the repository NOTICE file for provenance and licensing scope.
 
 """
@@ -20,19 +20,11 @@ else:
 
 ensure_repo_root(__file__)
 
+from backtests._shared._experiments import build_replay_experiment
+from backtests._shared._experiments import run_experiment
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
-from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
-from backtests._shared._prediction_market_backtest import run_reported_backtest
 from backtests._shared._prediction_market_runner import MarketDataConfig
-from backtests._shared._trade_tick_defaults import DEFAULT_INITIAL_CASH
-from backtests._shared._trade_tick_defaults import DEFAULT_POLYMARKET_MARKET_SLUG
-from backtests._shared._trade_tick_defaults import (
-    DEFAULT_POLYMARKET_NATIVE_DATA_SOURCES,
-)
-from backtests._shared._trade_tick_defaults import (
-    DEFAULT_SINGLE_MARKET_TRADE_TICK_LOOKBACK_DAYS,
-)
+from backtests._shared._replay_specs import PolymarketTradeTickReplay
 from backtests._shared._timing_harness import timing_harness
 from backtests._shared.data_sources import Native, Polymarket, TradeTick
 
@@ -41,17 +33,24 @@ NAME = "polymarket_trade_tick_vwap_reversion"
 
 DESCRIPTION = "VWAP dislocation mean-reversion on a single Polymarket market"
 
+EMIT_HTML = True
+CHART_OUTPUT_PATH = None
+
 DATA = MarketDataConfig(
     platform=Polymarket,
     data_type=TradeTick,
     vendor=Native,
-    sources=DEFAULT_POLYMARKET_NATIVE_DATA_SOURCES,
+    sources=(
+        "gamma:https://gamma-api.polymarket.com",
+        "trades:https://data-api.polymarket.com",
+        "clob:https://clob.polymarket.com",
+    ),
 )
 
-SIMS = (
-    MarketSimConfig(
-        market_slug=DEFAULT_POLYMARKET_MARKET_SLUG,
-        lookback_days=DEFAULT_SINGLE_MARKET_TRADE_TICK_LOOKBACK_DAYS,
+REPLAYS = (
+    PolymarketTradeTickReplay(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
+        lookback_days=30,
     ),
 )
 
@@ -77,25 +76,26 @@ REPORT = MarketReportConfig(
     pnl_label="PnL (USDC)",
 )
 
-BACKTEST = PredictionMarketBacktest(
+EXPERIMENT = build_replay_experiment(
     name=NAME,
+    description=DESCRIPTION,
     data=DATA,
-    sims=SIMS,
+    replays=REPLAYS,
     strategy_configs=STRATEGY_CONFIGS,
-    initial_cash=DEFAULT_INITIAL_CASH,
+    initial_cash=100.0,
     probability_window=30,
     min_trades=300,
     min_price_range=0.005,
+    report=REPORT,
+    empty_message="No Polymarket VWAP-reversion sims met the trade-tick requirements.",
+    emit_html=EMIT_HTML,
+    chart_output_path=CHART_OUTPUT_PATH,
 )
 
 
 @timing_harness
 def run() -> None:
-    run_reported_backtest(
-        backtest=BACKTEST,
-        report=REPORT,
-        empty_message="No Polymarket VWAP-reversion sims met the trade-tick requirements.",
-    )
+    run_experiment(EXPERIMENT)
 
 
 if __name__ == "__main__":

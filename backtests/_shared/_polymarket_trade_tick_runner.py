@@ -11,8 +11,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -21,11 +23,12 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.trading.strategy import Strategy
 
 from backtests._shared._execution_config import ExecutionModelConfig
+from backtests._shared._experiments import ReplayExperiment
+from backtests._shared._experiments import run_replay_experiment_async
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
 from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
-from backtests._shared._prediction_market_backtest import finalize_market_results
 from backtests._shared._prediction_market_runner import MarketDataConfig
+from backtests._shared._replay_specs import PolymarketTradeTickReplay
 from backtests._shared._strategy_configs import resolve_strategy_factory
 from backtests._shared._strategy_configs import StrategyConfigSpec
 
@@ -48,6 +51,7 @@ async def run_single_market_trade_backtest(
     chart_resample_rule: str | None = None,
     emit_summary: bool = True,
     emit_html: bool = True,
+    chart_output_path: str | Path | None = None,
     return_chart_layout: bool = False,
     return_summary_series: bool = False,
     end_time: pd.Timestamp | datetime | None = None,
@@ -62,16 +66,23 @@ async def run_single_market_trade_backtest(
     if end.tzinfo is None:
         end = end.tz_localize(UTC)
 
-    backtest = PredictionMarketBacktest(
+    report = MarketReportConfig(
+        count_key="trades",
+        count_label="Trades",
+        pnl_label="PnL (USDC)",
+        market_key="slug",
+    )
+    experiment = ReplayExperiment(
         name=name,
+        description=name,
         data=MarketDataConfig(
             platform="polymarket",
             data_type="trade_tick",
             vendor="native",
             sources=data_sources,
         ),
-        sims=(
-            MarketSimConfig(
+        replays=(
+            PolymarketTradeTickReplay(
                 market_slug=market_slug,
                 token_index=token_index,
                 lookback_days=lookback_days,
@@ -86,19 +97,14 @@ async def run_single_market_trade_backtest(
         execution=execution,
         chart_resample_rule=chart_resample_rule,
         emit_html=emit_html,
+        chart_output_path=chart_output_path,
         return_chart_layout=return_chart_layout,
         return_summary_series=return_summary_series,
+        report=report,
     )
-    report = MarketReportConfig(
-        count_key="trades",
-        count_label="Trades",
-        pnl_label="PnL (USDC)",
-        market_key="slug",
-    )
-
-    results = await backtest.run_async()
-    if emit_summary and results:
-        finalize_market_results(name=backtest.name, results=results, report=report)
+    if not emit_summary:
+        experiment = replace(experiment, report=None)
+    results = await run_replay_experiment_async(experiment)
     if not results:
         return None
 
@@ -106,3 +112,6 @@ async def run_single_market_trade_backtest(
     outcome = str(result.get("outcome") or "").strip()
     result["market_label"] = f"{market_slug}:{outcome}" if outcome else market_slug
     return result
+
+
+__all__ = ["PredictionMarketBacktest", "run_single_market_trade_backtest"]

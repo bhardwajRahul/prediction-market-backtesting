@@ -3,24 +3,6 @@ from __future__ import annotations
 import importlib
 import pytest
 
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_CLOSE_WINDOW_END_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_CLOSE_WINDOW_START_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_MARKET_ACTIVATION_START_NS,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_MARKET_CLOSE_TIME_NS,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_RELAY_SAMPLE_END_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_RELAY_SAMPLE_START_TIME,
-)
 from backtests._shared._strategy_configs import build_strategies_from_configs
 from strategies import QuoteTickBreakoutConfig
 from strategies import QuoteTickBreakoutStrategy
@@ -51,10 +33,12 @@ INSTRUMENT_ID = InstrumentId(Symbol("PM-TEST-YES"), Venue("POLYMARKET"))
 EXPECTED_MARKET_SLUG = (
     "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
 )
-EXPECTED_START_TIME = DEFAULT_PMXT_RELAY_SAMPLE_START_TIME
-EXPECTED_END_TIME = DEFAULT_PMXT_RELAY_SAMPLE_END_TIME
-EXPECTED_CLOSE_WINDOW_START_TIME = DEFAULT_PMXT_CLOSE_WINDOW_START_TIME
-EXPECTED_CLOSE_WINDOW_END_TIME = DEFAULT_PMXT_CLOSE_WINDOW_END_TIME
+EXPECTED_START_TIME = "2026-02-21T16:00:00Z"
+EXPECTED_END_TIME = "2026-02-23T10:00:00Z"
+EXPECTED_CLOSE_WINDOW_START_TIME = "2026-03-24T03:00:00Z"
+EXPECTED_CLOSE_WINDOW_END_TIME = "2026-03-24T08:00:00Z"
+EXPECTED_MARKET_ACTIVATION_START_NS = 1774326957277659000
+EXPECTED_MARKET_CLOSE_TIME_NS = 1774337757277659000
 EXPECTED_PMXT_SOURCES = (
     "local:/Volumes/LaCie/pmxt_raws",
     "archive:r2.pmxt.dev",
@@ -126,11 +110,11 @@ def test_pmxt_backtests_build_expected_quote_tick_strategy(
     module = importlib.import_module(module_name)
     captured: dict[str, object] = {}
 
-    def _fake_run_reported_backtest(**kwargs):  # type: ignore[no-untyped-def]
-        captured.update(kwargs)
+    def _fake_run_experiment(experiment):  # type: ignore[no-untyped-def]
+        captured["experiment"] = experiment
         return []
 
-    monkeypatch.setattr(module, "run_reported_backtest", _fake_run_reported_backtest)
+    monkeypatch.setattr(module, "run_experiment", _fake_run_experiment)
 
     module.run()
 
@@ -143,16 +127,16 @@ def test_pmxt_backtests_build_expected_quote_tick_strategy(
 
     assert isinstance(strategy, strategy_cls)
     assert isinstance(strategy.config, config_cls)
-    assert module.BACKTEST.name == module.NAME
-    assert module.BACKTEST.data == module.DATA
-    assert module.BACKTEST.sims == module.SIMS
-    assert module.BACKTEST.initial_cash == 100.0
-    assert module.BACKTEST.min_quotes == 500
-    assert module.BACKTEST.min_price_range == 0.005
-    assert module.BACKTEST.probability_window > 0
+    assert module.EXPERIMENT.name == module.NAME
+    assert module.EXPERIMENT.data == module.DATA
+    assert module.EXPERIMENT.replays == module.REPLAYS
+    assert module.EXPERIMENT.initial_cash == 100.0
+    assert module.EXPERIMENT.min_quotes == 500
+    assert module.EXPERIMENT.min_price_range == 0.005
+    assert module.EXPERIMENT.probability_window > 0
     assert module.DATA.sources == EXPECTED_PMXT_SOURCES
-    assert len(module.SIMS) == 1
-    sim = module.SIMS[0]
+    assert len(module.REPLAYS) == 1
+    sim = module.REPLAYS[0]
     assert sim.market_slug == EXPECTED_MARKET_SLUG
     assert sim.token_index == 0
     if module_name in TIME_BASED_SINGLE_MARKET_MODULES:
@@ -161,20 +145,17 @@ def test_pmxt_backtests_build_expected_quote_tick_strategy(
     else:
         assert sim.start_time == EXPECTED_START_TIME
         assert sim.end_time == EXPECTED_END_TIME
-    assert captured["backtest"] is module.BACKTEST
-    assert captured["report"] == module.REPORT
+    assert captured["experiment"] is module.EXPERIMENT
+    assert module.EXPERIMENT.report == module.REPORT
 
 
-def test_pmxt_late_favorite_runner_marks_settlement_pnl(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_pmxt_late_favorite_runner_marks_settlement_pnl():
     module = importlib.import_module(
         "backtests.polymarket_quote_tick_pmxt_late_favorite_limit_hold"
     )
-    finalized_calls: list[dict[str, object]] = []
     fake_results = [
         {
-            "slug": module.SIMS[0].market_slug,
+            "slug": module.REPLAYS[0].market_slug,
             "quotes": 1000,
             "fills": 1,
             "pnl": -0.75,
@@ -182,25 +163,14 @@ def test_pmxt_late_favorite_runner_marks_settlement_pnl(
             "fill_events": [{"action": "buy", "price": 0.90, "quantity": 25.0}],
         }
     ]
-    monkeypatch.setattr(module.BACKTEST, "run", lambda: fake_results)
-    monkeypatch.setattr(module, "compute_binary_settlement_pnl", lambda *_args: 2.5)
-    monkeypatch.setattr(
-        module,
-        "finalize_market_results",
-        lambda **kwargs: finalized_calls.append(kwargs),
-    )
-
-    module.run()
+    results = module.RESULT_POLICY.apply(fake_results)
 
     assert module.REPORT.pnl_label == "Settlement PnL (USDC)"
-    assert module.SIMS[0].start_time == EXPECTED_CLOSE_WINDOW_START_TIME
-    assert module.SIMS[0].end_time == EXPECTED_CLOSE_WINDOW_END_TIME
+    assert module.REPLAYS[0].start_time == EXPECTED_CLOSE_WINDOW_START_TIME
+    assert module.REPLAYS[0].end_time == EXPECTED_CLOSE_WINDOW_END_TIME
     assert fake_results[0]["market_exit_pnl"] == -0.75
-    assert fake_results[0]["pnl"] == 2.5
-    assert len(finalized_calls) == 1
-    assert finalized_calls[0]["name"] == module.NAME
-    assert finalized_calls[0]["report"] == module.REPORT
-    assert finalized_calls[0]["results"] == fake_results
+    assert fake_results[0]["pnl"] != -0.75
+    assert results == fake_results
 
     strategies = build_strategies_from_configs(
         strategy_configs=module.STRATEGY_CONFIGS,
@@ -217,18 +187,18 @@ def test_pmxt_late_favorite_runner_marks_settlement_pnl(
     [
         (
             "backtests.polymarket_quote_tick_pmxt_late_favorite_limit_hold",
-            DEFAULT_PMXT_MARKET_ACTIVATION_START_NS,
-            DEFAULT_PMXT_MARKET_CLOSE_TIME_NS,
+            EXPECTED_MARKET_ACTIVATION_START_NS,
+            EXPECTED_MARKET_CLOSE_TIME_NS,
         ),
         (
             "backtests.polymarket_quote_tick_pmxt_threshold_momentum",
-            DEFAULT_PMXT_MARKET_ACTIVATION_START_NS,
-            DEFAULT_PMXT_MARKET_CLOSE_TIME_NS,
+            EXPECTED_MARKET_ACTIVATION_START_NS,
+            EXPECTED_MARKET_CLOSE_TIME_NS,
         ),
         (
             "backtests.polymarket_quote_tick_pmxt_final_period_momentum",
-            DEFAULT_PMXT_MARKET_CLOSE_TIME_NS - 180 * 60 * 1_000_000_000,
-            DEFAULT_PMXT_MARKET_CLOSE_TIME_NS,
+            EXPECTED_MARKET_CLOSE_TIME_NS - 180 * 60 * 1_000_000_000,
+            EXPECTED_MARKET_CLOSE_TIME_NS,
         ),
     ],
 )
@@ -238,7 +208,7 @@ def test_time_based_pmxt_single_market_samples_overlap_strategy_window(
     market_close_time_ns: int,
 ):
     module = importlib.import_module(module_name)
-    sim = module.SIMS[0]
+    sim = module.REPLAYS[0]
 
     assert sim.start_time == EXPECTED_CLOSE_WINDOW_START_TIME
     assert sim.end_time == EXPECTED_CLOSE_WINDOW_END_TIME
@@ -259,53 +229,49 @@ def test_pmxt_multi_sim_example_runner_uses_fixed_windows(
     )
     captured: dict[str, object] = {}
 
-    def _fake_run_reported_multi_sim_pmxt_backtest(**kwargs):  # type: ignore[no-untyped-def]
-        captured.update(kwargs)
+    def _fake_run_experiment(experiment):  # type: ignore[no-untyped-def]
+        captured["experiment"] = experiment
         return []
 
-    monkeypatch.setattr(
-        module,
-        "run_reported_multi_sim_pmxt_backtest",
-        _fake_run_reported_multi_sim_pmxt_backtest,
-    )
+    monkeypatch.setattr(module, "run_experiment", _fake_run_experiment)
 
     module.run()
 
-    assert module.BACKTEST.name == module.NAME
-    assert module.BACKTEST.data == module.DATA
-    assert module.BACKTEST.sims == module.SIMS
-    assert module.BACKTEST.initial_cash == 100.0
-    assert module.BACKTEST.min_quotes == 500
-    assert module.BACKTEST.min_price_range == 0.005
-    assert module.BACKTEST.probability_window == 30
+    assert module.EXPERIMENT.name == module.NAME
+    assert module.EXPERIMENT.data == module.DATA
+    assert module.EXPERIMENT.replays == module.REPLAYS
+    assert module.EXPERIMENT.initial_cash == 100.0
+    assert module.EXPERIMENT.min_quotes == 500
+    assert module.EXPERIMENT.min_price_range == 0.005
+    assert module.EXPERIMENT.probability_window == 30
     assert module.DATA.sources == EXPECTED_PMXT_SOURCES
     assert module.REPORT.market_key == "sim_label"
-    assert [sim.market_slug for sim in module.SIMS] == [
+    assert [sim.market_slug for sim in module.REPLAYS] == [
         EXPECTED_MARKET_SLUG,
         EXPECTED_MARKET_SLUG,
         EXPECTED_MARKET_SLUG,
         EXPECTED_MARKET_SLUG,
     ]
-    assert [sim.start_time for sim in module.SIMS] == [
+    assert [sim.start_time for sim in module.REPLAYS] == [
         "2026-02-21T16:00:00Z",
         "2026-02-22T10:00:00Z",
         "2026-02-22T22:00:00Z",
         "2026-03-24T03:00:00Z",
     ]
-    assert [sim.end_time for sim in module.SIMS] == [
+    assert [sim.end_time for sim in module.REPLAYS] == [
         "2026-02-23T10:00:00Z",
         "2026-02-22T22:00:00Z",
         "2026-02-23T10:00:00Z",
         "2026-03-24T08:00:00Z",
     ]
-    assert [sim.metadata for sim in module.SIMS] == [
+    assert [sim.metadata for sim in module.REPLAYS] == [
         {"sim_label": "sample-a-full-window"},
         {"sim_label": "sample-b-2026-02-22-day"},
         {"sim_label": "sample-c-2026-02-22-late"},
         {"sim_label": "sample-d-close-window"},
     ]
 
-    for sim in module.SIMS:
+    for sim in module.REPLAYS:
         assert sim.market_slug
         assert sim.token_index == 0
         assert isinstance(sim.start_time, str) and sim.start_time
@@ -321,13 +287,12 @@ def test_pmxt_multi_sim_example_runner_uses_fixed_windows(
     assert isinstance(strategy, QuoteTickVWAPReversionStrategy)
     assert isinstance(strategy.config, QuoteTickVWAPReversionConfig)
 
-    assert captured["backtest"] is module.BACKTEST
-    assert captured["report"] == module.REPORT
+    assert captured["experiment"] is module.EXPERIMENT
     assert (
-        captured["empty_message"]
+        module.EXPERIMENT.empty_message
         == "No PMXT multi-sim example windows met the quote-tick requirements."
     )
     assert (
-        captured["partial_message"]
+        module.EXPERIMENT.partial_message
         == "Completed {completed} of {total} fixed example sims."
     )

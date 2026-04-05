@@ -5,7 +5,6 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +14,10 @@ import pandas as pd
 from nautilus_trader.adapters.prediction_market import (
     research as prediction_market_research,
 )
+from nautilus_trader.adapters.prediction_market import LoadedReplay
+from nautilus_trader.adapters.prediction_market import ReplayCoverageStats
+from nautilus_trader.adapters.prediction_market import ReplayLoadRequest
+from nautilus_trader.adapters.prediction_market import ReplayWindow
 from nautilus_trader.adapters.prediction_market.backtest_utils import (
     build_brier_inputs,
 )
@@ -26,9 +29,6 @@ from nautilus_trader.adapters.prediction_market.backtest_utils import (
 )
 from nautilus_trader.adapters.prediction_market.backtest_utils import (
     extract_price_points,
-)
-from nautilus_trader.adapters.prediction_market.backtest_utils import (
-    infer_realized_outcome,
 )
 from nautilus_trader.adapters.prediction_market.fill_model import (
     PredictionMarketTakerFillModel,
@@ -48,7 +48,6 @@ from nautilus_trader.common.component import is_backtest_force_stop
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import StrategyFactory as NautilusStrategyFactory
 from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.enums import AccountType
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.objects import Money
@@ -59,36 +58,24 @@ from backtests._shared._backtest_runtime import apply_backtest_run_state
 from backtests._shared._backtest_runtime import build_backtest_run_state
 from backtests._shared._backtest_runtime import print_backtest_result_warnings
 from backtests._shared._execution_config import ExecutionModelConfig
-from backtests._shared._market_data_support import resolve_market_data_support
-from backtests._shared._prediction_market_runner import MarketDataConfig
+from backtests._shared._market_data_config import MarketDataConfig
+from backtests._shared._market_data_support import resolve_replay_adapter
+from backtests._shared._replay_specs import MarketSimConfig
+from backtests._shared._replay_specs import ReplaySpec
+from backtests._shared._replay_specs import coerce_legacy_market_sim_config
 from backtests._shared._strategy_configs import build_importable_strategy_configs
 from backtests._shared._strategy_configs import StrategyConfigSpec
-from backtests._shared.data_sources.kalshi_native import (
-    RunnerKalshiDataLoader as KalshiDataLoader,
-)
-from backtests._shared.data_sources.pmxt import (
-    RunnerPolymarketPMXTDataLoader as PolymarketPMXTDataLoader,
-)
-from backtests._shared.data_sources.polymarket_native import (
-    RunnerPolymarketDataLoader as PolymarketDataLoader,
-)
+from backtests._shared.data_sources.kalshi_native import RunnerKalshiDataLoader
+from backtests._shared.data_sources.pmxt import RunnerPolymarketPMXTDataLoader
+from backtests._shared.data_sources.polymarket_native import RunnerPolymarketDataLoader
+
+
+KalshiDataLoader = RunnerKalshiDataLoader
+PolymarketDataLoader = RunnerPolymarketDataLoader
+PolymarketPMXTDataLoader = RunnerPolymarketPMXTDataLoader
 
 
 type StrategyFactory = Callable[[InstrumentId], Strategy]
-
-
-@dataclass(frozen=True)
-class MarketSimConfig:
-    market_slug: str | None = None
-    market_ticker: str | None = None
-    token_index: int = 0
-    lookback_days: int | None = None
-    lookback_hours: float | None = None
-    start_time: pd.Timestamp | datetime | str | None = None
-    end_time: pd.Timestamp | datetime | str | None = None
-    outcome: str | None = None
-    strategy_configs: Sequence[StrategyConfigSpec] | None = None
-    metadata: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -103,30 +90,14 @@ class MarketReportConfig:
     summary_report_path: str | None = None
 
 
-@dataclass(frozen=True)
-class _LoadedMarketSim:
-    spec: MarketSimConfig
-    instrument: Any
-    records: list[Any]
-    count: int
-    count_key: str
-    market_key: str
-    market_id: str
-    outcome: str
-    realized_outcome: float | None
-    prices: list[float]
-    metadata: Mapping[str, Any]
-    requested_start_ns: int | None
-    requested_end_ns: int | None
-
-
 class PredictionMarketBacktest:
     def __init__(
         self,
         *,
         name: str,
         data: MarketDataConfig,
-        sims: Sequence[MarketSimConfig],
+        replays: Sequence[ReplaySpec] | None = None,
+        sims: Sequence[ReplaySpec | MarketSimConfig] | None = None,
         strategy_configs: Sequence[StrategyConfigSpec] = (),
         strategy_factory: StrategyFactory | None = None,
         initial_cash: float,
@@ -142,6 +113,7 @@ class PredictionMarketBacktest:
         execution: ExecutionModelConfig | None = None,
         chart_resample_rule: str | None = None,
         emit_html: bool = True,
+        chart_output_path: str | Path | None = None,
         return_chart_layout: bool = False,
         return_summary_series: bool = False,
     ) -> None:
@@ -151,9 +123,15 @@ class PredictionMarketBacktest:
             raise ValueError(
                 "strategy_configs is required when strategy_factory is not provided."
             )
+        if replays is not None and sims is not None:
+            raise ValueError("Use replays or sims, not both.")
+        raw_replays = replays if replays is not None else sims
+        if raw_replays is None:
+            raise ValueError("replays is required.")
         self.name = name
         self.data = data
-        self.sims = tuple(sims)
+        self._sims = tuple(raw_replays)
+        self.replays = self._normalize_replays(self._sims)
         self.strategy_configs = tuple(strategy_configs)
         self.strategy_factory = strategy_factory
         self.initial_cash = float(initial_cash)
@@ -169,8 +147,13 @@ class PredictionMarketBacktest:
         self.execution = execution if execution is not None else ExecutionModelConfig()
         self.chart_resample_rule = chart_resample_rule
         self.emit_html = emit_html
+        self.chart_output_path = chart_output_path
         self.return_chart_layout = return_chart_layout
         self.return_summary_series = return_summary_series
+
+    @property
+    def sims(self) -> tuple[ReplaySpec | MarketSimConfig, ...]:
+        return self._sims
 
     def run(self) -> list[dict[str, Any]]:
         try:
@@ -194,7 +177,7 @@ class PredictionMarketBacktest:
         try:
             for loaded_sim in loaded_sims:
                 engine.add_instrument(loaded_sim.instrument)
-                engine.add_data(loaded_sim.records)
+                engine.add_data(list(loaded_sim.records))
 
             if self.strategy_factory is not None:
                 for loaded_sim in loaded_sims:
@@ -232,8 +215,8 @@ class PredictionMarketBacktest:
                         data=loaded_sim.records,
                         backtest_end_ns=engine_result.backtest_end,
                         forced_stop=forced_stop,
-                        requested_start_ns=loaded_sim.requested_start_ns,
-                        requested_end_ns=loaded_sim.requested_end_ns,
+                        requested_start_ns=loaded_sim.requested_window.start_ns,
+                        requested_end_ns=loaded_sim.requested_window.end_ns,
                     ),
                 )
                 for loaded_sim in loaded_sims
@@ -245,248 +228,61 @@ class PredictionMarketBacktest:
     async def run_backtest_async(self) -> list[dict[str, Any]]:
         return await self.run_async()
 
-    async def _load_sims_async(self) -> list[_LoadedMarketSim]:
-        support = resolve_market_data_support(
+    def _normalize_replays(
+        self,
+        replays: Sequence[ReplaySpec | MarketSimConfig],
+    ) -> tuple[ReplaySpec, ...]:
+        normalized: list[ReplaySpec] = []
+        adapter = resolve_replay_adapter(
             platform=self.data.platform,
             data_type=self.data.data_type,
             vendor=self.data.vendor,
         )
-        load_sim = getattr(self, support.load_sim_method_name)
-        with support.configure_data_source(sources=self.data.sources) as data_source:
+        for replay in replays:
+            if isinstance(replay, MarketSimConfig):
+                replay = coerce_legacy_market_sim_config(
+                    platform=self.data.platform,
+                    data_type=self.data.data_type,
+                    vendor=self.data.vendor,
+                    sim=replay,
+                )
+            if not isinstance(replay, adapter.replay_spec_type):
+                raise TypeError(
+                    "Replay spec does not match selected adapter. "
+                    f"Expected {adapter.replay_spec_type.__name__}, "
+                    f"received {type(replay).__name__}."
+                )
+            normalized.append(replay)
+        return tuple(normalized)
+
+    def _load_request(self) -> ReplayLoadRequest:
+        min_record_count = (
+            self.min_quotes if self.data.data_type == "quote_tick" else self.min_trades
+        )
+        return ReplayLoadRequest(
+            min_record_count=min_record_count,
+            min_price_range=self.min_price_range,
+            default_lookback_days=self.default_lookback_days,
+            default_lookback_hours=self.default_lookback_hours,
+            default_start_time=self.default_start_time,
+            default_end_time=self.default_end_time,
+        )
+
+    async def _load_sims_async(self) -> list[LoadedReplay]:
+        adapter = resolve_replay_adapter(
+            platform=self.data.platform,
+            data_type=self.data.data_type,
+            vendor=self.data.vendor,
+        )
+        with adapter.configure_sources(sources=self.data.sources) as data_source:
             print(data_source.summary)
-            loaded_sims: list[_LoadedMarketSim] = []
-            for sim in self.sims:
-                loaded_sim = await load_sim(sim)
+            loaded_sims: list[LoadedReplay] = []
+            request = self._load_request()
+            for replay in self.replays:
+                loaded_sim = await adapter.load_replay(replay, request=request)
                 if loaded_sim is not None:
                     loaded_sims.append(loaded_sim)
             return loaded_sims
-
-    async def _load_polymarket_trade_tick_sim(
-        self, sim: MarketSimConfig
-    ) -> _LoadedMarketSim | None:
-        if sim.market_slug is None:
-            raise ValueError("market_slug is required for Polymarket trade-tick sims.")
-
-        lookback_days = sim.lookback_days or self.default_lookback_days
-        if lookback_days is None:
-            raise ValueError(
-                "lookback_days is required for Polymarket trade-tick sims."
-            )
-
-        end = pd.Timestamp(
-            sim.end_time if sim.end_time is not None else self.default_end_time
-        )
-        if pd.isna(end):
-            end = pd.Timestamp(datetime.now(UTC))
-        if end.tzinfo is None:
-            end = end.tz_localize(UTC)
-        else:
-            end = end.tz_convert(UTC)
-        start = end - pd.Timedelta(days=lookback_days)
-
-        print(
-            f"Loading Polymarket market {sim.market_slug} "
-            f"(token_index={sim.token_index}, lookback={lookback_days}d, "
-            f"window_end={end.isoformat()})..."
-        )
-        try:
-            loader = await PolymarketDataLoader.from_market_slug(
-                sim.market_slug, token_index=sim.token_index
-            )
-            trades = await loader.load_trades(start, end)
-        except Exception as exc:
-            print(f"Skip {sim.market_slug}: unable to load trades ({exc})")
-            return None
-
-        prices = [float(trade.price) for trade in trades]
-        if len(trades) < self.min_trades:
-            print(
-                f"Skip {sim.market_slug}: {len(trades)} trades < {self.min_trades} required"
-            )
-            return None
-        if prices and max(prices) - min(prices) < self.min_price_range:
-            print(
-                f"Skip {sim.market_slug}: price range {max(prices) - min(prices):.3f} "
-                f"< {self.min_price_range:.3f}"
-            )
-            return None
-        if not trades:
-            print(f"Skip {sim.market_slug}: no trades returned")
-            return None
-
-        metadata = dict(sim.metadata or {})
-        return _LoadedMarketSim(
-            spec=sim,
-            instrument=loader.instrument,
-            records=list(trades),
-            count=len(trades),
-            count_key="trades",
-            market_key="slug",
-            market_id=sim.market_slug,
-            outcome=str(loader.instrument.outcome or sim.outcome or ""),
-            realized_outcome=infer_realized_outcome(loader.instrument),
-            prices=prices,
-            metadata=metadata,
-            requested_start_ns=int(start.value),
-            requested_end_ns=int(end.value),
-        )
-
-    async def _load_polymarket_pmxt_quote_tick_sim(
-        self, sim: MarketSimConfig
-    ) -> _LoadedMarketSim | None:
-        if sim.market_slug is None:
-            raise ValueError("market_slug is required for Polymarket quote-tick sims.")
-
-        end = pd.Timestamp(
-            sim.end_time if sim.end_time is not None else self.default_end_time
-        )
-        if pd.isna(end):
-            end = pd.Timestamp(datetime.now(UTC))
-        if end.tzinfo is None:
-            end = end.tz_localize(UTC)
-        else:
-            end = end.tz_convert(UTC)
-
-        start_candidate = (
-            sim.start_time if sim.start_time is not None else self.default_start_time
-        )
-        if start_candidate is not None:
-            start = pd.Timestamp(start_candidate)
-            if start.tzinfo is None:
-                start = start.tz_localize(UTC)
-            else:
-                start = start.tz_convert(UTC)
-        else:
-            lookback_hours = sim.lookback_hours or self.default_lookback_hours
-            if lookback_hours is None:
-                raise ValueError(
-                    "start_time/end_time or lookback_hours is required for quote-tick sims."
-                )
-            start = end - pd.Timedelta(hours=lookback_hours)
-
-        if start >= end:
-            raise ValueError(
-                f"start_time {start.isoformat()} must be earlier than end_time {end.isoformat()}"
-            )
-
-        print(
-            f"Loading PMXT Polymarket market {sim.market_slug} "
-            f"(token_index={sim.token_index}, window_start={start.isoformat()}, "
-            f"window_end={end.isoformat()})..."
-        )
-        try:
-            loader = await PolymarketPMXTDataLoader.from_market_slug(
-                sim.market_slug, token_index=sim.token_index
-            )
-            records = list(loader.load_order_book_and_quotes(start, end))
-        except Exception as exc:
-            print(f"Skip {sim.market_slug}: unable to load PMXT quotes ({exc})")
-            return None
-
-        prices: list[float] = []
-        quote_count = 0
-        for record in records:
-            if not isinstance(record, QuoteTick):
-                continue
-            quote_count += 1
-            prices.append((float(record.bid_price) + float(record.ask_price)) / 2.0)
-
-        if quote_count < self.min_quotes:
-            print(
-                f"Skip {sim.market_slug}: {quote_count} quotes < {self.min_quotes} required"
-            )
-            return None
-        if prices and max(prices) - min(prices) < self.min_price_range:
-            print(
-                f"Skip {sim.market_slug}: price range {max(prices) - min(prices):.3f} "
-                f"< {self.min_price_range:.3f}"
-            )
-            return None
-        if not records:
-            print(f"Skip {sim.market_slug}: no PMXT records returned")
-            return None
-
-        metadata = dict(sim.metadata or {})
-        return _LoadedMarketSim(
-            spec=sim,
-            instrument=loader.instrument,
-            records=records,
-            count=quote_count,
-            count_key="quotes",
-            market_key="slug",
-            market_id=sim.market_slug,
-            outcome=str(loader.instrument.outcome or sim.outcome or ""),
-            realized_outcome=infer_realized_outcome(loader.instrument),
-            prices=prices,
-            metadata=metadata,
-            requested_start_ns=int(start.value),
-            requested_end_ns=int(end.value),
-        )
-
-    async def _load_kalshi_trade_tick_sim(
-        self, sim: MarketSimConfig
-    ) -> _LoadedMarketSim | None:
-        if sim.market_ticker is None:
-            raise ValueError("market_ticker is required for Kalshi trade-tick sims.")
-
-        lookback_days = sim.lookback_days or self.default_lookback_days
-        if lookback_days is None:
-            raise ValueError("lookback_days is required for Kalshi trade-tick sims.")
-
-        end = pd.Timestamp(
-            sim.end_time if sim.end_time is not None else self.default_end_time
-        )
-        if pd.isna(end):
-            end = pd.Timestamp(datetime.now(UTC))
-        if end.tzinfo is None:
-            end = end.tz_localize(UTC)
-        else:
-            end = end.tz_convert(UTC)
-        start = end - pd.Timedelta(days=lookback_days)
-
-        print(
-            f"Loading Kalshi market {sim.market_ticker} "
-            f"(lookback={lookback_days}d, window_end={end.isoformat()})..."
-        )
-        try:
-            loader = await KalshiDataLoader.from_market_ticker(sim.market_ticker)
-            trades = await loader.load_trades(start, end)
-        except Exception as exc:
-            print(f"Skip {sim.market_ticker}: unable to load trades ({exc})")
-            return None
-
-        prices = [float(trade.price) for trade in trades]
-        if len(trades) < self.min_trades:
-            print(
-                f"Skip {sim.market_ticker}: {len(trades)} trades < {self.min_trades} required"
-            )
-            return None
-        if prices and max(prices) - min(prices) < self.min_price_range:
-            print(
-                f"Skip {sim.market_ticker}: price range {max(prices) - min(prices):.3f} "
-                f"< {self.min_price_range:.3f}"
-            )
-            return None
-        if not trades:
-            print(f"Skip {sim.market_ticker}: no trades returned")
-            return None
-
-        metadata = dict(sim.metadata or {})
-        return _LoadedMarketSim(
-            spec=sim,
-            instrument=loader.instrument,
-            records=list(trades),
-            count=len(trades),
-            count_key="trades",
-            market_key="ticker",
-            market_id=sim.market_ticker,
-            outcome=str(sim.outcome or ""),
-            realized_outcome=infer_realized_outcome(loader.instrument),
-            prices=prices,
-            metadata=metadata,
-            requested_start_ns=int(start.value),
-            requested_end_ns=int(end.value),
-        )
 
     def _build_engine(self) -> BacktestEngine:
         engine = BacktestEngine(
@@ -497,37 +293,36 @@ class PredictionMarketBacktest:
             ),
         )
         latency_model = self.execution.build_latency_model()
-        support = resolve_market_data_support(
+        adapter = resolve_replay_adapter(
             platform=self.data.platform,
             data_type=self.data.data_type,
             vendor=self.data.vendor,
         )
+        engine_profile = adapter.engine_profile
         fill_model = None
-        if support.engine_spec.fill_model_mode == "taker":
+        if engine_profile.fill_model_mode == "taker":
             fill_model = PredictionMarketTakerFillModel()
-        elif support.engine_spec.fill_model_mode != "passive_book":
+        elif engine_profile.fill_model_mode != "passive_book":
             raise AssertionError(
-                f"Unsupported fill model mode {support.engine_spec.fill_model_mode!r}"
+                f"Unsupported fill model mode {engine_profile.fill_model_mode!r}"
             )
         engine.add_venue(
-            venue=support.engine_spec.venue,
-            oms_type=support.engine_spec.oms_type,
-            account_type=AccountType.CASH,
-            base_currency=support.engine_spec.base_currency,
-            starting_balances=[
-                Money(self.initial_cash, support.engine_spec.base_currency)
-            ],
+            venue=engine_profile.venue,
+            oms_type=engine_profile.oms_type,
+            account_type=engine_profile.account_type,
+            base_currency=engine_profile.base_currency,
+            starting_balances=[Money(self.initial_cash, engine_profile.base_currency)],
             fill_model=fill_model,
-            fee_model=support.engine_spec.fee_model_factory(),
-            book_type=support.engine_spec.book_type,
+            fee_model=engine_profile.fee_model_factory(),
+            book_type=engine_profile.book_type,
             latency_model=latency_model,
-            liquidity_consumption=support.engine_spec.liquidity_consumption,
+            liquidity_consumption=engine_profile.liquidity_consumption,
             queue_position=self.execution.queue_position,
         )
         return engine
 
     def _build_importable_strategy_configs(
-        self, loaded_sims: Sequence[_LoadedMarketSim]
+        self, loaded_sims: Sequence[LoadedReplay]
     ) -> list[Any]:
         if not loaded_sims:
             return []
@@ -573,7 +368,7 @@ class PredictionMarketBacktest:
         self,
         *,
         strategy_spec: StrategyConfigSpec,
-        loaded_sim: _LoadedMarketSim,
+        loaded_sim: LoadedReplay,
         all_instrument_ids: Sequence[InstrumentId],
     ) -> StrategyConfigSpec:
         raw_config = strategy_spec.get("config", {})
@@ -581,9 +376,14 @@ class PredictionMarketBacktest:
             raise TypeError("strategy config payload must be a mapping")
 
         metadata = dict(loaded_sim.metadata)
-        metadata.setdefault("market_slug", loaded_sim.spec.market_slug)
-        metadata.setdefault("market_ticker", loaded_sim.spec.market_ticker)
-        metadata.setdefault("token_index", loaded_sim.spec.token_index)
+        metadata.setdefault(
+            "market_slug", getattr(loaded_sim.spec, "market_slug", None)
+        )
+        metadata.setdefault(
+            "market_ticker",
+            getattr(loaded_sim.spec, "market_ticker", None),
+        )
+        metadata.setdefault("token_index", getattr(loaded_sim.spec, "token_index", 0))
         metadata.setdefault("outcome", loaded_sim.outcome)
 
         return {
@@ -647,7 +447,7 @@ class PredictionMarketBacktest:
     def _build_result(
         self,
         *,
-        loaded_sim: _LoadedMarketSim,
+        loaded_sim: LoadedReplay,
         fills_report: pd.DataFrame,
         positions_report: pd.DataFrame,
         single_market_artifacts: Mapping[str, Any] | None = None,
@@ -670,15 +470,17 @@ class PredictionMarketBacktest:
             "instrument_id": instrument_id,
             "outcome": loaded_sim.outcome,
             "realized_outcome": loaded_sim.realized_outcome,
-            "token_index": loaded_sim.spec.token_index,
+            "token_index": getattr(loaded_sim.spec, "token_index", 0),
             "fill_events": self._serialize_fill_events(
                 market_id=loaded_sim.market_id, fills_report=instrument_fills
             ),
         }
-        if loaded_sim.spec.market_slug is not None:
-            result["slug"] = loaded_sim.spec.market_slug
-        if loaded_sim.spec.market_ticker is not None:
-            result["ticker"] = loaded_sim.spec.market_ticker
+        market_slug = getattr(loaded_sim.spec, "market_slug", None)
+        market_ticker = getattr(loaded_sim.spec, "market_ticker", None)
+        if market_slug is not None:
+            result["slug"] = market_slug
+        if market_ticker is not None:
+            result["ticker"] = market_ticker
         if loaded_sim.prices:
             result["entry_min"] = min(loaded_sim.prices)
             result["max"] = max(loaded_sim.prices)
@@ -692,7 +494,7 @@ class PredictionMarketBacktest:
         self,
         *,
         engine: BacktestEngine,
-        loaded_sims: Sequence[_LoadedMarketSim],
+        loaded_sims: Sequence[LoadedReplay],
         fills_report: pd.DataFrame,
     ) -> dict[str, Any]:
         if len(loaded_sims) != 1:
@@ -708,7 +510,7 @@ class PredictionMarketBacktest:
         self,
         *,
         engine: BacktestEngine,
-        loaded_sim: _LoadedMarketSim,
+        loaded_sim: LoadedReplay,
         fills_report: pd.DataFrame,
     ) -> dict[str, Any]:
         price_points = extract_price_points(
@@ -729,9 +531,9 @@ class PredictionMarketBacktest:
         chart_layout = None
         chart_title = f"{self.name}:{loaded_sim.market_id} legacy chart"
         if self.emit_html or self.return_chart_layout:
-            output_path = (
-                Path("output") / f"{self.name}_{loaded_sim.market_id}_legacy.html"
-            ).resolve()
+            output_path = self._resolve_chart_output_path(
+                market_id=loaded_sim.market_id
+            )
             output_path.parent.mkdir(parents=True, exist_ok=True)
             try:
                 chart_layout, chart_title = build_legacy_backtest_layout(
@@ -774,11 +576,41 @@ class PredictionMarketBacktest:
 
         return artifacts
 
+    def _resolve_chart_output_path(self, *, market_id: str) -> Path:
+        default_filename = f"{self.name}_{market_id}_legacy.html"
+        configured_path = self.chart_output_path
+        if configured_path is None:
+            return (Path("output") / default_filename).resolve()
+
+        if isinstance(configured_path, Path):
+            raw_path = str(configured_path)
+        else:
+            raw_path = configured_path
+
+        if "{" in raw_path:
+            try:
+                resolved = raw_path.format(name=self.name, market_id=market_id)
+            except KeyError as exc:
+                raise ValueError(
+                    "chart_output_path may only reference {name} and {market_id}."
+                ) from exc
+            path = Path(resolved)
+            if not path.suffix:
+                path = path / default_filename
+            return path.resolve()
+
+        path = Path(raw_path)
+        if path.suffix:
+            if len(self.sims) == 1:
+                return path.resolve()
+            return path.with_name(f"{path.stem}_{market_id}{path.suffix}").resolve()
+        return (path / default_filename).resolve()
+
     def _build_single_market_summary_series(
         self,
         *,
         engine: BacktestEngine,
-        loaded_sim: _LoadedMarketSim,
+        loaded_sim: LoadedReplay,
         fills_report: pd.DataFrame,
         market_prices: Any,
         user_probabilities: pd.Series,
@@ -1003,10 +835,55 @@ def run_reported_backtest(
     return results
 
 
+def _LoadedMarketSim(
+    *,
+    spec: ReplaySpec | MarketSimConfig,
+    instrument: Any,
+    records: Sequence[Any],
+    count: int,
+    count_key: str,
+    market_key: str,
+    market_id: str,
+    outcome: str,
+    realized_outcome: float | None,
+    prices: Sequence[float],
+    metadata: Mapping[str, Any] | None,
+    requested_start_ns: int | None,
+    requested_end_ns: int | None,
+) -> LoadedReplay:
+    instrument_id = getattr(instrument, "id", None)
+    return LoadedReplay(
+        replay=spec,
+        instrument=instrument,
+        records=tuple(records),
+        outcome=outcome,
+        realized_outcome=realized_outcome,
+        metadata=dict(metadata or {}),
+        requested_window=ReplayWindow(
+            start_ns=requested_start_ns,
+            end_ns=requested_end_ns,
+        ),
+        loaded_window=None,
+        coverage_stats=ReplayCoverageStats(
+            count=count,
+            count_key=count_key,
+            market_key=market_key,
+            market_id=market_id,
+            prices=tuple(prices),
+        ),
+        instrument_ids=(instrument_id,) if instrument_id is not None else (),
+    )
+
+
 __all__ = [
+    "KalshiDataLoader",
     "MarketReportConfig",
     "MarketSimConfig",
+    "PolymarketDataLoader",
+    "PolymarketPMXTDataLoader",
     "PredictionMarketBacktest",
+    "QuoteTick",
+    "LoadedReplay",
     "_LoadedMarketSim",
     "finalize_market_results",
     "run_reported_backtest",

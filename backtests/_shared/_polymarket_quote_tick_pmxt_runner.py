@@ -11,17 +11,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from collections.abc import Sequence
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.trading.strategy import Strategy
 
 from backtests._shared._execution_config import ExecutionModelConfig
+from backtests._shared._experiments import ReplayExperiment
+from backtests._shared._experiments import run_replay_experiment_async
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
 from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
-from backtests._shared._prediction_market_backtest import finalize_market_results
 from backtests._shared._prediction_market_runner import MarketDataConfig
+from backtests._shared._replay_specs import PolymarketPMXTQuoteReplay
 from backtests._shared._strategy_configs import resolve_strategy_factory
 from backtests._shared._strategy_configs import StrategyConfigSpec
 
@@ -44,6 +47,7 @@ async def run_single_market_pmxt_backtest(
     chart_resample_rule: str | None = None,
     emit_summary: bool = True,
     emit_html: bool = True,
+    chart_output_path: str | Path | None = None,
     return_chart_layout: bool = False,
     return_summary_series: bool = False,
     start_time: str | None = None,
@@ -56,16 +60,23 @@ async def run_single_market_pmxt_backtest(
         strategy_factory=strategy_factory,
         strategy_configs=strategy_configs,
     )
-    backtest = PredictionMarketBacktest(
+    report = MarketReportConfig(
+        count_key="quotes",
+        count_label="Quotes",
+        pnl_label="PnL (USDC)",
+        market_key="slug",
+    )
+    experiment = ReplayExperiment(
         name=name,
+        description=name,
         data=MarketDataConfig(
             platform="polymarket",
             data_type="quote_tick",
             vendor="pmxt",
             sources=tuple(data_sources),
         ),
-        sims=(
-            MarketSimConfig(
+        replays=(
+            PolymarketPMXTQuoteReplay(
                 market_slug=market_slug,
                 token_index=token_index,
                 lookback_hours=lookback_hours,
@@ -82,17 +93,15 @@ async def run_single_market_pmxt_backtest(
         execution=execution,
         chart_resample_rule=chart_resample_rule,
         emit_html=emit_html,
+        chart_output_path=chart_output_path,
         return_chart_layout=return_chart_layout,
         return_summary_series=return_summary_series,
+        report=report,
     )
-    report = MarketReportConfig(
-        count_key="quotes",
-        count_label="Quotes",
-        pnl_label="PnL (USDC)",
-        market_key="slug",
-    )
-
-    results = await backtest.run_async()
-    if emit_summary and results:
-        finalize_market_results(name=backtest.name, results=results, report=report)
+    if not emit_summary:
+        experiment = replace(experiment, report=None)
+    results = await run_replay_experiment_async(experiment)
     return results[0] if results else None
+
+
+__all__ = ["PredictionMarketBacktest", "run_single_market_pmxt_backtest"]

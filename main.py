@@ -6,7 +6,8 @@ Discovers runnable modules in flat runner entrypoints under `backtests/` and
 
     NAME        str   — display name shown in the menu
     DESCRIPTION str   — one-line description shown in the menu
-    run()       sync or async — entry point called when the backtest is selected
+    EXPERIMENT  object — manifest executed by the shared experiment dispatcher
+    run()       sync or async — optional thin entry point called when selected
 
 Run via:
     uv run python main.py
@@ -106,17 +107,22 @@ def _assignment_targets(node: ast.Assign | ast.AnnAssign) -> list[str]:
     return []
 
 
+def _has_assignment(module_ast: ast.Module, target_name: str) -> bool:
+    for node in module_ast.body:
+        if isinstance(
+            node, (ast.Assign, ast.AnnAssign)
+        ) and target_name in _assignment_targets(
+            node,
+        ):
+            return True
+    return False
+
+
 def _has_run_entrypoint(module_ast: ast.Module) -> bool:
     for node in module_ast.body:
         if (
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             and node.name == "run"
-        ):
-            return True
-        if isinstance(
-            node, (ast.Assign, ast.AnnAssign)
-        ) and "run" in _assignment_targets(
-            node,
         ):
             return True
     return False
@@ -137,7 +143,9 @@ def _load_runner_metadata(path: Path) -> dict[str, Any] | None:
         _warn(f"could not parse {relative_path}: {exc}")
         return None
 
-    if not _has_run_entrypoint(module_ast):
+    if not (
+        _has_assignment(module_ast, "EXPERIMENT") or _has_run_entrypoint(module_ast)
+    ):
         return None
 
     name = path.stem
@@ -580,9 +588,19 @@ def _load_runner(backtest: dict[str, Any]) -> Any:
             sys.modules[module_name] = prior_module
 
     runner = getattr(module, "run", None)
-    if not callable(runner):
-        raise RuntimeError(f"{relative_path} does not expose a callable run()")
-    return runner
+    if callable(runner):
+        return runner
+
+    experiment = getattr(module, "EXPERIMENT", None)
+    if experiment is None:
+        raise RuntimeError(f"{relative_path} does not expose EXPERIMENT or run()")
+
+    from backtests._shared._experiments import run_experiment
+
+    def _run_manifest() -> Any:
+        return run_experiment(experiment)
+
+    return _run_manifest
 
 
 def _supports_textual_menu() -> bool:

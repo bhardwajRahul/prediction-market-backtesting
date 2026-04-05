@@ -6,8 +6,9 @@ import os
 import pandas as pd
 import pytest
 
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_POLYMARKET_MARKET_SLUG,
+
+EXPECTED_MARKET_SLUG = (
+    "will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026"
 )
 
 
@@ -22,7 +23,7 @@ def test_pmxt_loader_returns_quotes_and_book_deltas():
 
     async def _load():
         loader = await PolymarketPMXTDataLoader.from_market_slug(
-            DEFAULT_POLYMARKET_MARKET_SLUG,
+            EXPECTED_MARKET_SLUG,
         )
         end = pd.Timestamp.now(tz="UTC").floor("h") - pd.Timedelta(hours=3)
         start = end - pd.Timedelta(hours=2)

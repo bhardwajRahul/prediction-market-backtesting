@@ -1,6 +1,6 @@
 # Derived from NautilusTrader prediction-market example code.
 # Distributed under the GNU Lesser General Public License Version 3.0 or later.
-# Modified in this repository on 2026-03-29, 2026-03-31, 2026-04-03, and 2026-04-04.
+# Modified in this repository on 2026-03-29, 2026-03-31, 2026-04-03, 2026-04-04, and 2026-04-05.
 # See the repository NOTICE file for provenance and licensing scope.
 
 """
@@ -22,46 +22,11 @@ ensure_repo_root(__file__)
 
 from backtests._shared._execution_config import ExecutionModelConfig
 from backtests._shared._execution_config import StaticLatencyConfig
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_POLYMARKET_MARKET_SLUG,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_BASE_LATENCY_MS,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_CANCEL_LATENCY_MS,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_CLOSE_WINDOW_END_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_CLOSE_WINDOW_START_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_DATA_SOURCES,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_INSERT_LATENCY_MS,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_QUEUE_POSITION,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_RELAY_SAMPLE_END_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_RELAY_SAMPLE_START_TIME,
-)
-from backtests._shared._polymarket_quote_tick_defaults import (
-    DEFAULT_PMXT_UPDATE_LATENCY_MS,
-)
-from backtests._shared._polymarket_quote_tick_pmxt_multi_runner import (
-    run_reported_multi_sim_pmxt_backtest,
-)
+from backtests._shared._experiments import build_replay_experiment
+from backtests._shared._experiments import run_experiment
 from backtests._shared._prediction_market_backtest import MarketReportConfig
-from backtests._shared._prediction_market_backtest import MarketSimConfig
-from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
 from backtests._shared._prediction_market_runner import MarketDataConfig
+from backtests._shared._replay_specs import PolymarketPMXTQuoteReplay
 from backtests._shared._timing_harness import timing_harness
 from backtests._shared.data_sources import PMXT, Polymarket, QuoteTick
 
@@ -70,40 +35,47 @@ NAME = "polymarket_quote_tick_pmxt_multi_sim_runner"
 
 DESCRIPTION = "Example PMXT quote-tick multi-sim runner using fixed historical sims"
 
+EMIT_HTML = True
+CHART_OUTPUT_PATH = None
+
 DATA = MarketDataConfig(
     platform=Polymarket,
     data_type=QuoteTick,
     vendor=PMXT,
-    sources=DEFAULT_PMXT_DATA_SOURCES,
+    sources=(
+        "local:/Volumes/LaCie/pmxt_raws",
+        "archive:r2.pmxt.dev",
+        "relay:209-209-10-83.sslip.io",
+    ),
 )
 
-SIMS = (
-    MarketSimConfig(
-        market_slug=DEFAULT_POLYMARKET_MARKET_SLUG,
+REPLAYS = (
+    PolymarketPMXTQuoteReplay(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
         token_index=0,
-        start_time=DEFAULT_PMXT_RELAY_SAMPLE_START_TIME,
-        end_time=DEFAULT_PMXT_RELAY_SAMPLE_END_TIME,
+        start_time="2026-02-21T16:00:00Z",
+        end_time="2026-02-23T10:00:00Z",
         metadata={"sim_label": "sample-a-full-window"},
     ),
-    MarketSimConfig(
-        market_slug=DEFAULT_POLYMARKET_MARKET_SLUG,
+    PolymarketPMXTQuoteReplay(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
         token_index=0,
         start_time="2026-02-22T10:00:00Z",
         end_time="2026-02-22T22:00:00Z",
         metadata={"sim_label": "sample-b-2026-02-22-day"},
     ),
-    MarketSimConfig(
-        market_slug=DEFAULT_POLYMARKET_MARKET_SLUG,
+    PolymarketPMXTQuoteReplay(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
         token_index=0,
         start_time="2026-02-22T22:00:00Z",
         end_time="2026-02-23T10:00:00Z",
         metadata={"sim_label": "sample-c-2026-02-22-late"},
     ),
-    MarketSimConfig(
-        market_slug=DEFAULT_POLYMARKET_MARKET_SLUG,
+    PolymarketPMXTQuoteReplay(
+        market_slug="will-openai-launch-a-new-consumer-hardware-product-by-march-31-2026",
         token_index=0,
-        start_time=DEFAULT_PMXT_CLOSE_WINDOW_START_TIME,
-        end_time=DEFAULT_PMXT_CLOSE_WINDOW_END_TIME,
+        start_time="2026-03-24T03:00:00Z",
+        end_time="2026-03-24T08:00:00Z",
         metadata={"sim_label": "sample-d-close-window"},
     ),
 )
@@ -132,36 +104,37 @@ REPORT = MarketReportConfig(
 )
 
 EXECUTION = ExecutionModelConfig(
-    queue_position=DEFAULT_PMXT_QUEUE_POSITION,
+    queue_position=True,
     latency_model=StaticLatencyConfig(
-        base_latency_ms=DEFAULT_PMXT_BASE_LATENCY_MS,
-        insert_latency_ms=DEFAULT_PMXT_INSERT_LATENCY_MS,
-        update_latency_ms=DEFAULT_PMXT_UPDATE_LATENCY_MS,
-        cancel_latency_ms=DEFAULT_PMXT_CANCEL_LATENCY_MS,
+        base_latency_ms=75.0,
+        insert_latency_ms=10.0,
+        update_latency_ms=5.0,
+        cancel_latency_ms=5.0,
     ),
 )
 
-BACKTEST = PredictionMarketBacktest(
+EXPERIMENT = build_replay_experiment(
     name=NAME,
+    description=DESCRIPTION,
     data=DATA,
-    sims=SIMS,
+    replays=REPLAYS,
     strategy_configs=STRATEGY_CONFIGS,
     initial_cash=100.0,
     probability_window=30,
     min_quotes=500,
     min_price_range=0.005,
     execution=EXECUTION,
+    report=REPORT,
+    empty_message="No PMXT multi-sim example windows met the quote-tick requirements.",
+    partial_message="Completed {completed} of {total} fixed example sims.",
+    emit_html=EMIT_HTML,
+    chart_output_path=CHART_OUTPUT_PATH,
 )
 
 
 @timing_harness
 def run() -> None:
-    run_reported_multi_sim_pmxt_backtest(
-        backtest=BACKTEST,
-        report=REPORT,
-        empty_message="No PMXT multi-sim example windows met the quote-tick requirements.",
-        partial_message="Completed {completed} of {total} fixed example sims.",
-    )
+    run_experiment(EXPERIMENT)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,252 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+from typing import TYPE_CHECKING
+
+import pandas as pd
+
+from backtests._shared._execution_config import ExecutionModelConfig
+from backtests._shared._optimizer import OptimizationConfig
+from backtests._shared._optimizer import OptimizationSummary
+from backtests._shared._optimizer import run_parameter_optimization
+from backtests._shared._prediction_market_backtest import MarketReportConfig
+from backtests._shared._prediction_market_backtest import PredictionMarketBacktest
+from backtests._shared._prediction_market_backtest import finalize_market_results
+from backtests._shared._result_policies import ResultPolicy
+from backtests._shared._replay_specs import ReplaySpec
+from backtests._shared._strategy_configs import StrategyConfigSpec
+
+if TYPE_CHECKING:
+    from backtests._shared._market_data_config import MarketDataConfig
+
+
+@dataclass(frozen=True)
+class ReplayExperiment:
+    name: str
+    description: str
+    data: MarketDataConfig
+    replays: Sequence[ReplaySpec]
+    strategy_configs: Sequence[StrategyConfigSpec] = ()
+    strategy_factory: Callable[..., Any] | None = None
+    initial_cash: float = 100.0
+    probability_window: int = 30
+    min_trades: int = 0
+    min_quotes: int = 0
+    min_price_range: float = 0.0
+    default_lookback_days: int | None = None
+    default_lookback_hours: float | None = None
+    default_start_time: pd.Timestamp | datetime | str | None = None
+    default_end_time: pd.Timestamp | datetime | str | None = None
+    nautilus_log_level: str = "INFO"
+    execution: ExecutionModelConfig | None = None
+    chart_resample_rule: str | None = None
+    emit_html: bool = True
+    chart_output_path: str | Path | None = None
+    return_chart_layout: bool = False
+    return_summary_series: bool = False
+    report: MarketReportConfig | None = None
+    empty_message: str | None = None
+    partial_message: str | None = None
+    result_policy: ResultPolicy | None = None
+
+
+@dataclass(frozen=True)
+class OptimizationExperiment:
+    name: str
+    description: str
+    optimization: OptimizationConfig
+
+
+type Experiment = ReplayExperiment | OptimizationExperiment
+
+
+def build_backtest_for_experiment(
+    experiment: ReplayExperiment,
+) -> PredictionMarketBacktest:
+    return PredictionMarketBacktest(
+        name=experiment.name,
+        data=experiment.data,
+        replays=tuple(experiment.replays),
+        strategy_configs=tuple(experiment.strategy_configs),
+        strategy_factory=experiment.strategy_factory,
+        initial_cash=experiment.initial_cash,
+        probability_window=experiment.probability_window,
+        min_trades=experiment.min_trades,
+        min_quotes=experiment.min_quotes,
+        min_price_range=experiment.min_price_range,
+        default_lookback_days=experiment.default_lookback_days,
+        default_lookback_hours=experiment.default_lookback_hours,
+        default_start_time=experiment.default_start_time,
+        default_end_time=experiment.default_end_time,
+        nautilus_log_level=experiment.nautilus_log_level,
+        execution=experiment.execution,
+        chart_resample_rule=experiment.chart_resample_rule,
+        emit_html=experiment.emit_html,
+        chart_output_path=experiment.chart_output_path,
+        return_chart_layout=experiment.return_chart_layout,
+        return_summary_series=experiment.return_summary_series,
+    )
+
+
+def build_replay_experiment(
+    *,
+    name: str,
+    description: str,
+    data: MarketDataConfig,
+    replays: Sequence[ReplaySpec],
+    strategy_configs: Sequence[StrategyConfigSpec] = (),
+    strategy_factory: Callable[..., Any] | None = None,
+    initial_cash: float = 100.0,
+    probability_window: int = 30,
+    min_trades: int = 0,
+    min_quotes: int = 0,
+    min_price_range: float = 0.0,
+    default_lookback_days: int | None = None,
+    default_lookback_hours: float | None = None,
+    default_start_time: pd.Timestamp | datetime | str | None = None,
+    default_end_time: pd.Timestamp | datetime | str | None = None,
+    nautilus_log_level: str = "INFO",
+    execution: ExecutionModelConfig | None = None,
+    chart_resample_rule: str | None = None,
+    emit_html: bool = True,
+    chart_output_path: str | Path | None = None,
+    return_chart_layout: bool = False,
+    return_summary_series: bool = False,
+    report: MarketReportConfig | None = None,
+    empty_message: str | None = None,
+    partial_message: str | None = None,
+    result_policy: ResultPolicy | None = None,
+) -> ReplayExperiment:
+    return ReplayExperiment(
+        name=name,
+        description=description,
+        data=data,
+        replays=tuple(replays),
+        strategy_configs=tuple(strategy_configs),
+        strategy_factory=strategy_factory,
+        initial_cash=initial_cash,
+        probability_window=probability_window,
+        min_trades=min_trades,
+        min_quotes=min_quotes,
+        min_price_range=min_price_range,
+        default_lookback_days=default_lookback_days,
+        default_lookback_hours=default_lookback_hours,
+        default_start_time=default_start_time,
+        default_end_time=default_end_time,
+        nautilus_log_level=nautilus_log_level,
+        execution=execution,
+        chart_resample_rule=chart_resample_rule,
+        emit_html=emit_html,
+        chart_output_path=chart_output_path,
+        return_chart_layout=return_chart_layout,
+        return_summary_series=return_summary_series,
+        report=report,
+        empty_message=empty_message,
+        partial_message=partial_message,
+        result_policy=result_policy,
+    )
+
+
+def replay_experiment_from_backtest(
+    *,
+    backtest: PredictionMarketBacktest,
+    description: str,
+    report: MarketReportConfig | None = None,
+    empty_message: str | None = None,
+    partial_message: str | None = None,
+    result_policy: ResultPolicy | None = None,
+) -> ReplayExperiment:
+    return ReplayExperiment(
+        name=backtest.name,
+        description=description,
+        data=backtest.data,
+        replays=backtest.replays,
+        strategy_configs=backtest.strategy_configs,
+        strategy_factory=backtest.strategy_factory,
+        initial_cash=backtest.initial_cash,
+        probability_window=backtest.probability_window,
+        min_trades=backtest.min_trades,
+        min_quotes=backtest.min_quotes,
+        min_price_range=backtest.min_price_range,
+        default_lookback_days=backtest.default_lookback_days,
+        default_lookback_hours=backtest.default_lookback_hours,
+        default_start_time=backtest.default_start_time,
+        default_end_time=backtest.default_end_time,
+        nautilus_log_level=backtest.nautilus_log_level,
+        execution=backtest.execution,
+        chart_resample_rule=backtest.chart_resample_rule,
+        emit_html=backtest.emit_html,
+        chart_output_path=backtest.chart_output_path,
+        return_chart_layout=backtest.return_chart_layout,
+        return_summary_series=backtest.return_summary_series,
+        report=report,
+        empty_message=empty_message,
+        partial_message=partial_message,
+        result_policy=result_policy,
+    )
+
+
+async def run_replay_experiment_async(
+    experiment: ReplayExperiment,
+) -> list[dict[str, Any]]:
+    backtest = build_backtest_for_experiment(experiment)
+    results = await backtest.run_async()
+    if not results:
+        if experiment.empty_message:
+            print(experiment.empty_message)
+        return []
+
+    if experiment.result_policy is not None:
+        transformed = experiment.result_policy.apply(results)
+        if transformed is not None:
+            results = transformed
+
+    if experiment.partial_message and len(results) < len(experiment.replays):
+        print(
+            experiment.partial_message.format(
+                completed=len(results),
+                total=len(experiment.replays),
+            )
+        )
+
+    if experiment.report is not None:
+        finalize_market_results(
+            name=experiment.name,
+            results=results,
+            report=experiment.report,
+        )
+    return results
+
+
+def run_experiment(
+    experiment: Experiment,
+) -> list[dict[str, Any]] | OptimizationSummary:
+    if isinstance(experiment, OptimizationExperiment):
+        return run_parameter_optimization(experiment.optimization)
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(run_replay_experiment_async(experiment))
+
+    raise RuntimeError(
+        "run_experiment() cannot be called inside an active event loop; use await run_replay_experiment_async() instead."
+    )
+
+
+__all__ = [
+    "Experiment",
+    "OptimizationExperiment",
+    "ReplayExperiment",
+    "build_backtest_for_experiment",
+    "build_replay_experiment",
+    "replay_experiment_from_backtest",
+    "run_experiment",
+    "run_replay_experiment_async",
+]

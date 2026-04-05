@@ -28,9 +28,9 @@ def test_configured_polymarket_native_data_source_maps_explicit_endpoints() -> N
             "clob.polymarket.com",
         ]
     ) as selection:
-        assert "gamma=https://gamma-api.polymarket.com" in selection.summary
-        assert "trades=https://data-api.polymarket.com" in selection.summary
-        assert "clob=https://clob.polymarket.com" in selection.summary
+        assert "gamma:https://gamma-api.polymarket.com" in selection.summary
+        assert "trades:https://data-api.polymarket.com" in selection.summary
+        assert "clob:https://clob.polymarket.com" in selection.summary
         assert (
             RunnerPolymarketDataLoader._configured_gamma_base_url()
             == "https://gamma-api.polymarket.com"
@@ -55,9 +55,9 @@ def test_configured_polymarket_native_data_source_isolates_concurrent_loader_con
     async def _capture(prefix: str) -> tuple[str, str, str]:
         with configured_polymarket_native_data_source(
             sources=[
-                f"gamma={prefix}.gamma-api.polymarket.com",
-                f"trades={prefix}.data-api.polymarket.com/trades",
-                f"clob={prefix}.clob.polymarket.com",
+                f"gamma:{prefix}.gamma-api.polymarket.com",
+                f"trades:{prefix}.data-api.polymarket.com/trades",
+                f"clob:{prefix}.clob.polymarket.com",
             ]
         ):
             await asyncio.sleep(0)
@@ -83,3 +83,27 @@ def test_configured_polymarket_native_data_source_isolates_concurrent_loader_con
         "https://b.clob.polymarket.com",
     )
     assert os.getenv(POLYMARKET_GAMMA_BASE_URL_ENV) is None
+
+
+def test_configured_polymarket_native_data_source_keeps_legacy_equals_prefixes() -> (
+    None
+):
+    with configured_polymarket_native_data_source(
+        sources=[
+            "gamma=gamma-api.polymarket.com",
+            "trades=data-api.polymarket.com/trades",
+            "clob=clob.polymarket.com",
+        ]
+    ):
+        assert (
+            RunnerPolymarketDataLoader._configured_gamma_base_url()
+            == "https://gamma-api.polymarket.com"
+        )
+        assert (
+            RunnerPolymarketDataLoader._configured_trade_api_base_url()
+            == "https://data-api.polymarket.com"
+        )
+        assert (
+            RunnerPolymarketDataLoader._configured_clob_base_url()
+            == "https://clob.polymarket.com"
+        )
