@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/docs.yml"
       - "README.md"
       - "docs/**"
       - "docs_overrides/**"
@@ -11,6 +12,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".github/workflows/docs.yml"
       - "README.md"
       - "docs/**"
       - "docs_overrides/**"
@@ -30,9 +32,27 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install mkdocs-shadcn
-      - run: mkdocs build --strict
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv venv --python 3.13
+      - run: uv pip install "mkdocs==1.6.1" "mkdocs-shadcn==0.10.3" "pymdown-extensions==10.21.2" "Pygments==2.19.2"
+      - run: uv run mkdocs build --strict
+      - run: |
+          test -f site/css/pygments/shadcn-light.css
+          test -f site/css/pygments/github-dark.css
+          python - <<'PY'
+          from pathlib import Path
+
+          setup_html = Path("site/setup/index.html").read_text()
+          assert 'id="pygments-light"' in setup_html
+          assert 'id="pygments-dark"' in setup_html
+          assert 'class="codehilite"' in setup_html
+
+          light_css = Path("site/css/pygments/shadcn-light.css").read_text()
+          dark_css = Path("site/css/pygments/github-dark.css").read_text()
+          assert ".codehilite .k" in light_css
+          assert ".codehilite .k" in dark_css
+          PY
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

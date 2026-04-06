@@ -41,16 +41,6 @@ Fantastic single & multi-market charting. Featuring: equity (total & individual 
 
 Detailed guides have been filed away in the [docs index](https://evan-kolberg.github.io/prediction-market-backtesting/) for better organization and long-term sustainability.
 
-## Quick Start
-
-```bash
-git clone https://github.com/evan-kolberg/prediction-market-backtesting.git
-cd prediction-market-backtesting
-make install
-make backtest
-```
-
-
 ## Table of Contents
 
 - [Docs Index](https://evan-kolberg.github.io/prediction-market-backtesting/)
@@ -64,6 +54,7 @@ make backtest
   - [Repo Layout](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#repo-layout)
   - [Runner Contract](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#runner-contract)
   - [HTML And Report Modes](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#html-and-report-modes)
+  - [Optimization Runners](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#optimization-runners)
   - [Designing Good Runner Files](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#designing-good-runner-files)
   - [Multi-Market Strategy Configs](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#multi-market-strategy-configs)
   - [Running Backtests](https://evan-kolberg.github.io/prediction-market-backtesting/backtests/#running-backtests)
@@ -94,6 +85,7 @@ make backtest
   - [PC-Side Alternative](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-relay/#pc-side-alternative)
   - [Archived Relay Snapshot](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-relay/#archived-relay-snapshot)
 - [Vendor Fetch Sources And Timing](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-fetch-sources/)
+  - [PMXT](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-fetch-sources/#pmxt)
   - [Example Output](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-fetch-sources/#example-output)
   - [Timing Expectations By Source](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-fetch-sources/#timing-expectations-by-source)
   - [How To See This Output](https://evan-kolberg.github.io/prediction-market-backtesting/pmxt-fetch-sources/#how-to-see-this-output)
@@ -104,6 +96,7 @@ make backtest
 - [Testing](https://evan-kolberg.github.io/prediction-market-backtesting/testing/)
   - [Standard Repo Gate](https://evan-kolberg.github.io/prediction-market-backtesting/testing/#standard-repo-gate)
   - [Useful Smoke Checks](https://evan-kolberg.github.io/prediction-market-backtesting/testing/#useful-smoke-checks)
+  - [Docs Validation](https://evan-kolberg.github.io/prediction-market-backtesting/testing/#docs-validation)
 - [Project Status](https://evan-kolberg.github.io/prediction-market-backtesting/project-status/)
   - [Roadmap](https://evan-kolberg.github.io/prediction-market-backtesting/project-status/#roadmap)
   - [Known Issues](https://evan-kolberg.github.io/prediction-market-backtesting/project-status/#known-issues)

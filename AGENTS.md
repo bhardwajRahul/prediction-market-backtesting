@@ -1,7 +1,10 @@
 # Repository Notes For Agents
 
 ## Appendix
-1. DO NOT TOUCH OTHER PARTS OF THE ROOT README. ONLY TOUCH TABLE OF CONTENTS. ALL OTHER DOCUMENTATION CHANGES GET FILED AWAY, DO NOT BLOAT ROOT README. ONLY CHANGE TOC TO BE IN SYNC WITH DOCS.
+1. Do not touch other parts of the root README. Only touch the table of contents. All other documentation changes get filed away; do not bloat the root README. Only change the TOC to be in sync with docs.
+2. Do not trim the TOC. All docs and subheaders should be properly recorded in the root README.
+Do not add extra things to the root README. When I say to update docs, I mean to edit, create, etc. in the docs folder, and to only update the TOC when appropriate.
+3. If core internals or any logic that impacts backtesting is added, changed, or edited, right before submitting a PR, run an assortment of different backtest files to confirm nothing broke. Try trade tick kalshi, trade tick polymarket, quote tick polymarket, multi runners, optimizers, check for html as well. It is imperitive that progress moves forward, and no breaking changes get pushed to main. That would be catastrophic.
 
 ## Keep Scope Tight
 
@@ -188,9 +191,12 @@ One transient timeout immediately after restart is less important than a repeat.
 ## Docs Invariants
 
 - Root setup docs should include `duckdb`.
-- Root README should describe PMXT cache as enabled by default.
-- Root README and PMXT docs should describe timing output as default-on, with `BACKTEST_ENABLE_TIMING=0` as the opt-out.
+- `docs/setup.md` and the PMXT docs should describe PMXT cache as enabled by default.
+- `docs/setup.md` and the PMXT docs should describe timing output as default-on, with `BACKTEST_ENABLE_TIMING=0` as the opt-out.
+- Root README should stay lean outside the TOC, but the TOC itself should stay comprehensive and docs-oriented.
+- `docs/project-status.md` is the canonical place for roadmap, known issues, and recently fixed history; include PR links there instead of in the root README body.
 - If relay behavior or env vars change, update both `pmxt_relay/README.md` and `pmxt_relay/systemd/pmxt-relay.env.example`.
+- When touching MkDocs config, theme CSS, or code-fence behavior, preserve published syntax highlighting and verify it with `uv run mkdocs build --strict`.
 
 Examples in README should be durable:
 
@@ -202,7 +208,7 @@ Examples in README should be durable:
 - Never push directly to `main`.
 - Every commit intended for `main` must go through a pull request.
 - The required path is: branch -> draft PR -> review -> merge.
-- If the work belongs in the roadmap/known-issues history, add the relevant PR link in `README.md`.
+- If the work belongs in the roadmap/known-issues history, add the relevant PR link in `docs/project-status.md`.
 - Review the PR diff after opening it, wait for GitHub Actions to pass, then merge.
 
 ## Testing Standard
