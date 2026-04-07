@@ -8,8 +8,8 @@ Do not add extra things to the root README. When I say to update docs, I mean to
 
 ## Keep Scope Tight
 
-- Treat subtree updates in `nautilus_pm/` as separate work. Do not mix an upstream subtree pull with normal bugfix/docs PRs.
-- Keep repo-specific fixes in this repo layer unless there is a clear reason to update the vendored subtree.
+- It's okay to edit the adapters. Make sure that files are properly sorted and organized.
+- Vendored `nautilus_pm/` changes are allowed when they are the clearest fix, especially for shared plotting, adapter, or backtesting behavior.
 
 ## Local Verification
 
@@ -27,7 +27,23 @@ Useful smoke checks:
 uv run python backtests/kalshi_trade_tick_breakout.py
 uv run python backtests/polymarket_trade_tick_vwap_reversion.py
 uv run python backtests/polymarket_quote_tick_pmxt_ema_crossover.py
+uv run python backtests/polymarket_quote_tick_pmxt_multi_sim_runner.py
 ```
+
+## Preferred Change Pipeline
+
+For non-trivial work, prefer this order:
+
+1. start in planning mode or write a short explicit plan before editing
+2. make the code and docs changes
+3. run the relevant local verification plus representative runner smokes so
+   shared plotting, reporting, and backtest behavior did not get wrecked
+4. open or update a draft PR
+5. review the PR diff and wait for GitHub Actions to turn green
+6. wait for explicit user confirmation before merging to `main`
+
+Do not collapse those steps into one rush job. The default repo path is:
+plan -> implement -> validate -> draft PR -> green CI -> explicit merge command.
 
 ## What Matters Most
 
@@ -207,9 +223,9 @@ Examples in README should be durable:
 
 - Never push directly to `main`.
 - Every commit intended for `main` must go through a pull request.
-- The required path is: branch -> draft PR -> review -> merge.
+- The required path is: branch -> draft PR -> review -> green CI -> explicit user merge command -> merge.
 - If the work belongs in the roadmap/known-issues history, add the relevant PR link in `docs/project-status.md`.
-- Review the PR diff after opening it, wait for GitHub Actions to pass, then merge.
+- Review the PR diff after opening it, wait for GitHub Actions to pass, then wait for the user's merge instruction.
 
 ## Testing Standard
 

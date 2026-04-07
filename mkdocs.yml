@@ -43,8 +43,8 @@ nav:
       - Limits: /prediction-market-backtesting/execution-modeling/#limits
       - Vendor L2 Behavior: /prediction-market-backtesting/execution-modeling/#vendor-l2-behavior
       - PMXT: /prediction-market-backtesting/execution-modeling/#pmxt
-  - Data Vendors, Local Mirrors, And Local Processing:
-      - Data Vendors, Local Mirrors, And Local Processing: pmxt-byod.md
+  - Data Vendors, Local Mirrors, And Raw PMXT:
+      - Data Vendors, Local Mirrors, And Raw PMXT: pmxt-byod.md
       - PMXT: /prediction-market-backtesting/pmxt-byod/#pmxt
       - Runner Source Modes: /prediction-market-backtesting/pmxt-byod/#runner-source-modes
       - Lower-Level Loader Env Vars: /prediction-market-backtesting/pmxt-byod/#lower-level-loader-env-vars
@@ -66,8 +66,10 @@ nav:
       - How To See This Output: /prediction-market-backtesting/pmxt-fetch-sources/#how-to-see-this-output
   - Plotting:
       - Plotting: plotting.md
+      - Scaling Model: /prediction-market-backtesting/plotting/#scaling-model
       - Output Types: /prediction-market-backtesting/plotting/#output-types
       - Output Paths: /prediction-market-backtesting/plotting/#output-paths
+      - Example Summary Output: /prediction-market-backtesting/plotting/#example-summary-output
       - Multi-Market References: /prediction-market-backtesting/plotting/#multi-market-references
   - Testing:
       - Testing: testing.md
