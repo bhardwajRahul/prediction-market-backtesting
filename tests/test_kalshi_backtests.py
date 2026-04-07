@@ -86,7 +86,7 @@ def test_kalshi_backtests_build_expected_trade_tick_strategy(
     assert module.EXPERIMENT.data == module.DATA
     assert module.EXPERIMENT.replays == module.REPLAYS
     assert module.EXPERIMENT.initial_cash == 100.0
-    assert module.EXPERIMENT.min_trades == 1000
+    assert module.EXPERIMENT.min_trades == 200
     assert module.EXPERIMENT.min_price_range == 0.03
     assert module.EXPERIMENT.report == module.REPORT
     assert captured["experiment"] is module.EXPERIMENT
